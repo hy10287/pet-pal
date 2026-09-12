@@ -11,6 +11,11 @@ import {
 import { isHeadZone } from "../interaction/hit-zones";
 import { createLookState, gazeFromPointer, settleLook, updateLook } from "../interaction/mouse-follow";
 import { routeInteraction } from "../interaction/router";
+import {
+  intentFromAgentRequest,
+  isAgentIntentCommand,
+  summarizePlayed,
+} from "../shared/agent-control";
 import type { DisplayPresetId, EmotionIntent, InteractionKind } from "../shared/types";
 import { pacedDurationSec } from "../shared/motion-pace";
 import type { PetActor } from "./actor";
@@ -170,6 +175,7 @@ async function main(): Promise<void> {
     lastMotion = motionOffsets(pair.body ?? pair.face, 0);
     void actor.playClips(pair.face, pair.body).then(() => syncHud(true));
     syncHud(true);
+    return pair;
   };
 
   const play = (kind: InteractionKind) => {
@@ -247,6 +253,14 @@ async function main(): Promise<void> {
   );
 
   bridge.onCommand((command) => {
+    if (isAgentIntentCommand(command)) {
+      const pair = beginPlay(intentFromAgentRequest(command), "agent");
+      if (command.say) {
+        console.info("[nori] agent say (chat UI deferred):", command.say);
+      }
+      bridge.reportIntent(command.requestId, summarizePlayed(pair, command.say));
+      return;
+    }
     if (command === "idle") play("menu-idle");
     if (command === "random") play("random");
     if (command === "toggle-hud") {

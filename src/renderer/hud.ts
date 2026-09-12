@@ -95,6 +95,8 @@ function sourceLabel(source: DirectorDebugState["source"]): string {
       return "菜单 · 待机";
     case "menu-motion":
       return "菜单 · 指定动作";
+    case "agent":
+      return "本地 Agent";
     case "boot":
       return "启动";
     default:

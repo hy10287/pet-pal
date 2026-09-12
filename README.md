@@ -26,6 +26,20 @@ npm run preview
 
 > 若在 VS Code 终端里直接 `npx electron .` 没窗口，是因为 `ELECTRON_RUN_AS_NODE=1`。请用 `npm start` 或 `node launch.js`。
 
+## 本地 Agent 控制 API（slice 1）
+
+主进程在 **127.0.0.1** 提供一个无 LLM 的控制口，外部 agent 用 JSON 驱动 `MotionDirector`，不必把模型塞进渲染进程。
+
+默认端口 `3927`（环境变量 `NORI_CONTROL_PORT` 或配置项 `agentControlPort`）。**只绑定回环地址**。v1 **没有鉴权**：本机任意进程都能发指令，不要把该端口映射到局域网或公网。关闭：`NORI_CONTROL_DISABLED=1`。
+
+```bash
+curl -sS -X POST http://127.0.0.1:3927/intent \
+  -H "Content-Type: application/json" \
+  -d '{"emotion":"happy","intensity":0.7,"motionHint":"smile","say":"hello"}'
+```
+
+成功：`{"ok":true,"played":{...}}`。`say` 目前只记日志（聊天气泡 UI 未做）。可选字段：`variant`、`source`。可选 WebSocket：`ws://127.0.0.1:3927/intent`，报文同 JSON。
+
 ## 放置 Cubism Core（不随仓库分发）
 
 `live2dcubismcore.min.js` 受 Live2D 许可约束，**禁止再分发**，本仓库也不提交该文件。
@@ -126,7 +140,8 @@ npm test
 ```
 Electron 主进程
 ├── launch.js              清除 ELECTRON_RUN_AS_NODE 后拉起 Electron
-├── src/main/index.ts      透明置顶窗 / IPC / 托盘
+├── src/main/index.ts      透明置顶窗 / IPC / 托盘 / agent 控制口
+├── src/main/agent-control-server.ts   127.0.0.1 HTTP + 可选 WS
 ├── src/main/config.ts     modelPath / motionsTagsPath / motionsDir
 └── src/main/preview-server.ts   浏览器预览
 
@@ -152,6 +167,8 @@ flowchart LR
   F --> G
   G --> H[Live2D / Fallback Actor]
   I[Idle director] --> C
+  J["localhost Agent API"] --> D
+  J --> G
 ```
 
 ## 与 Live2DPet 的关系

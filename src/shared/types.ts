@@ -71,6 +71,11 @@ export interface AppConfig {
     width: number;
     height: number;
   };
+  /**
+   * Loopback agent-control HTTP port (always bound to 127.0.0.1).
+   * Override with NORI_CONTROL_PORT. v1 has no auth.
+   */
+  agentControlPort: number;
 }
 
 export interface BootstrapPayload {
@@ -93,7 +98,8 @@ export type InteractionKind =
   | "random"
   | "menu-idle"
   | "menu-motion"
-  | "chat";
+  | "chat"
+  | "agent";
 
 export interface DirectorDebugState {
   intent: EmotionIntent | null;

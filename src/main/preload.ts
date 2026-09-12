@@ -1,5 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { AgentIntentCommand, AgentPlayedSummary } from "../shared/agent-control";
 import type { AppConfig, BootstrapPayload, DisplayPresetId } from "../shared/types";
+
+export type NoriRendererCommand = string | AgentIntentCommand;
 
 export interface NoriBridge {
   isElectron: boolean;
@@ -24,7 +27,8 @@ export interface NoriBridge {
   setMenuOpen: (open: boolean) => void;
   getCursorLocal: () => Promise<{ x: number; y: number; inWindow: boolean; near: boolean } | null>;
   quit: () => void;
-  onCommand: (handler: (command: string) => void) => () => void;
+  onCommand: (handler: (command: NoriRendererCommand) => void) => () => void;
+  reportIntent: (requestId: string, played: AgentPlayedSummary) => void;
 }
 
 const bridge: NoriBridge = {
@@ -44,9 +48,12 @@ const bridge: NoriBridge = {
   getCursorLocal: () => ipcRenderer.invoke("nori:cursor-local"),
   quit: () => ipcRenderer.send("nori:quit"),
   onCommand: (handler) => {
-    const listener = (_event: unknown, command: string) => handler(command);
+    const listener = (_event: unknown, command: NoriRendererCommand) => handler(command);
     ipcRenderer.on("nori:command", listener);
     return () => ipcRenderer.removeListener("nori:command", listener);
+  },
+  reportIntent: (requestId, played) => {
+    ipcRenderer.send("nori:intent-result", requestId, played);
   },
 };
 

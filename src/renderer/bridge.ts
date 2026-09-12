@@ -40,6 +40,7 @@ export function createWebBridge(): NoriBridge {
     getCursorLocal: async () => null,
     quit: () => undefined,
     onCommand: () => () => undefined,
+    reportIntent: () => undefined,
   };
 }
 

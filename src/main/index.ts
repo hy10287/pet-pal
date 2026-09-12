@@ -2,6 +2,11 @@ import { BrowserWindow, app, ipcMain, screen } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { AppConfig, BootstrapPayload, DisplayPresetId } from "../shared/types";
+import {
+  type AgentControlRequest,
+  type AgentPlayedSummary,
+  isAgentControlEnabled,
+} from "../shared/agent-control";
 import { croppedWindowSize, parseDisplayPreset } from "../shared/display-preset";
 import {
   fileUrlIfExists,
@@ -11,6 +16,7 @@ import {
   resolveRepoPath,
   saveAppConfig,
 } from "./config";
+import { startAgentControlServer, type AgentControlHandle, newIntentRequestId } from "./agent-control-server";
 import { applyClickThrough, createPetWindow, preloadPath, rendererHtml } from "./window";
 import { createTray } from "./tray";
 import { applyLockedSize, movedBounds, placeAt, sameSize } from "./window-move";
@@ -28,11 +34,35 @@ if (process.platform === "linux") {
 
 let configState = loadAppConfig(ROOT);
 let persistPath = join(ROOT, "config", "local.json");
+let agentControl: AgentControlHandle | null = null;
 
-function sendCommand(command: string): void {
+const pendingIntents = new Map<string, (played?: AgentPlayedSummary) => void>();
+
+function sendCommand(command: string | { type: "intent"; requestId: string } & AgentControlRequest): void {
   for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed()) continue;
     win.webContents.send("nori:command", command);
   }
+}
+
+function forwardAgentIntent(req: AgentControlRequest): Promise<AgentPlayedSummary | undefined> {
+  const windows = BrowserWindow.getAllWindows().filter((win) => !win.isDestroyed());
+  if (windows.length === 0) {
+    return Promise.reject(new Error("renderer not ready"));
+  }
+  const requestId = newIntentRequestId();
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      pendingIntents.delete(requestId);
+      resolve(undefined);
+    }, 4000);
+    pendingIntents.set(requestId, (played) => {
+      clearTimeout(timer);
+      pendingIntents.delete(requestId);
+      resolve(played);
+    });
+    sendCommand({ type: "intent", requestId, ...req });
+  });
 }
 
 function resolveCubismFile(root: string, configuredPath: string): string {
@@ -221,6 +251,32 @@ app.whenReady().then(() => {
   });
 
   ipcMain.on("nori:quit", () => app.quit());
+
+  ipcMain.on("nori:intent-result", (_event, requestId: string, played: AgentPlayedSummary) => {
+    pendingIntents.get(requestId)?.(played);
+  });
+
+  if (isAgentControlEnabled()) {
+    void startAgentControlServer({
+      port: configState.config.agentControlPort,
+      onIntent: forwardAgentIntent,
+    })
+      .then((handle) => {
+        agentControl = handle;
+        console.log(
+          `[nori] agent control: ${handle.url} (127.0.0.1 only, no auth — local processes can drive motions)`,
+        );
+      })
+      .catch((error) => {
+        console.warn("[nori] agent control server failed to start", error);
+      });
+  }
+});
+
+app.on("before-quit", () => {
+  const handle = agentControl;
+  agentControl = null;
+  if (handle) void handle.close();
 });
 
 app.on("window-all-closed", () => {
