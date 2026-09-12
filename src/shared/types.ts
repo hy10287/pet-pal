@@ -1,0 +1,111 @@
+export type MotionLayer = "face" | "body";
+export type ExclusiveGroup = "face" | "body";
+export type HitZone = "head" | "face" | "body" | "empty";
+
+export interface EmotionIntent {
+  emotion: string;
+  variant?: string;
+  intensity: number;
+  contextTags: string[];
+  styleHint?: string;
+  /** When true, eventOnly catalog items may be selected. */
+  event?: boolean;
+}
+
+export interface CatalogItem {
+  id: string;
+  file: string;
+  path: string;
+  layer: MotionLayer;
+  exclusiveGroup: ExclusiveGroup;
+  emotion: string[];
+  variant: string[];
+  gestures: string[];
+  style: string[];
+  intensity: [number, number];
+  context: string[];
+  eventOnly: boolean;
+  weight: number;
+  duration: number;
+  loop: boolean;
+  tags: string[];
+}
+
+export interface RetrievalWeights {
+  variant: number;
+  context: number;
+  styleHint: number;
+  intensityFit: number;
+  itemWeight: number;
+}
+
+export interface RetrievalConfig {
+  topN: number;
+  cooldownMs: number;
+  antiRepeatWindow: number;
+  idleIntervalMs: [number, number];
+  weights: RetrievalWeights;
+  notes?: string;
+}
+
+export interface MotionCatalog {
+  schemaVersion: 1;
+  retrieval: RetrievalConfig;
+  items: CatalogItem[];
+}
+
+export type DisplayPresetId = "compact" | "balanced" | "standard" | "full";
+
+export interface AppConfig {
+  modelPath: string;
+  cubismCorePath: string;
+  motionsTagsPath: string;
+  motionsDir: string;
+  scale: number;
+  clickThrough: boolean;
+  debugHud: boolean;
+  /** Window-crop preset. Default: balanced / 上半身. Does not change model scale. */
+  displayPreset: DisplayPresetId;
+  /** Full-body baseline size. Presets only shorten height; this stays the fit reference. */
+  window: {
+    width: number;
+    height: number;
+  };
+}
+
+export interface BootstrapPayload {
+  config: AppConfig;
+  catalog: MotionCatalog;
+  cubismCoreUrl: string | null;
+  modelUrl: string | null;
+  motionsBaseUrl: string | null;
+  isElectron: boolean;
+  preview: boolean;
+}
+
+export type InteractionKind =
+  | "head-click"
+  | "head-pat"
+  | "body-click"
+  | "double-click"
+  | "hover-dwell"
+  | "idle"
+  | "random"
+  | "menu-idle"
+  | "menu-motion"
+  | "chat";
+
+export interface DirectorDebugState {
+  intent: EmotionIntent | null;
+  source: InteractionKind | "boot" | null;
+  faceId: string | null;
+  bodyId: string | null;
+  faceScore: number | null;
+  bodyScore: number | null;
+  reason: string;
+  playingUntil: number;
+  scale: number;
+  clickThrough: boolean;
+  actor: "live2d" | "fallback";
+  motionSource?: "file" | "params";
+}

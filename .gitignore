@@ -1,0 +1,52 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+npm-debug.log*
+config/local.json
+vendor/live2dcubismcore.min.js
+models/
+agent-tools/
+.vite/
+coverage/
+*.tsbuildinfo
+.cache/
+
+# local backups / scratch
+_backup_*/
+_cloud_extract/
+_apply_*.py
+_check_*.py
+_clean_*.py
+_cursor_*.ts
+_find_*.py
+_finish_*.py
+*.tgz
+*.patch
+cloud-*.tgz
+.nori-scratch/
+
+# electron / OS
+Thumbs.db
+Desktop.ini
+*.asar
+
+
+# local one-off scripts / shots
+_*.py
+_*.png
+_*.ts
+
+
+
+# Third-party / copyrighted Live2D character packs (keep local only; never publish)
+assets/kanade/
+assets/model/
+assets/**/*.moc3
+assets/**/*.model3.json
+assets/**/*.physics3.json
+assets/**/*.2048/
+assets/**/motions/
+
+# scratch json dumps
+_*.json

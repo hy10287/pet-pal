@@ -1,0 +1,13 @@
+{
+  "modelPath": "",
+  "cubismCorePath": "vendor/live2dcubismcore.min.js",
+  "motionsTagsPath": "fixtures/motions.tags.sample.json",
+  "motionsDir": "",
+  "scale": 1,
+  "clickThrough": false,
+  "debugHud": false,
+  "window": {
+    "width": 420,
+    "height": 560
+  }
+}

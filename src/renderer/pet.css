@@ -1,0 +1,257 @@
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  user-select: none;
+  font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+
+body.preview {
+  background: #1a2230;
+}
+
+#stage {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  /* Inline height from JS locks crop when window expands for HUD/menu. */
+}
+
+#stage canvas {
+  display: block;
+}
+
+#notice {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(12, 16, 24, 0.72);
+  color: #d7e2f2;
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: none;
+}
+
+#hud {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 50;
+  width: min(268px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  padding: 8px 10px 6px;
+  border-radius: 12px;
+  background: rgba(10, 14, 22, 0.9);
+  color: #e8eef7;
+  font-size: 11px;
+  line-height: 1.4;
+  pointer-events: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+/* Short window-crop: keep HUD readable via scroll; help collapsed by default in JS */
+#hud .hud-help:not([open]) summary {
+  margin-bottom: 0;
+}
+
+#hud .hud-title {
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: #7de3cf;
+}
+
+#hud .hud-row span {
+  display: inline-block;
+  width: 44px;
+  color: #8ea0b8;
+}
+
+#hud .hud-help {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: #b7c6d8;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+#hud .hud-help summary {
+  color: #7de3cf;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+#hud .hud-help ul {
+  margin: 0;
+  padding-left: 1.1em;
+}
+
+#hud .hud-help li {
+  margin: 0.2em 0;
+}
+
+#menu {
+  position: fixed;
+  z-index: 60;
+  width: 228px;
+  max-height: min(78vh, calc(100vh - 16px), 520px);
+  overflow: auto;
+  padding: 8px;
+  border-radius: 14px;
+  background: rgba(14, 18, 28, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42);
+  pointer-events: auto;
+  color: #eef4ff;
+}
+
+#menu .menu-section {
+  margin-bottom: 8px;
+}
+
+#menu .menu-section:last-child {
+  margin-bottom: 0;
+}
+
+#menu h3 {
+  margin: 0 4px 4px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: #7de3cf;
+}
+
+#menu button {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #eef4ff;
+  text-align: left;
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+
+#menu button:hover {
+  background: #2a364c;
+}
+
+#menu .menu-scale {
+  padding: 4px 8px 8px;
+}
+
+#menu .menu-scale-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #c5d2e4;
+  margin-bottom: 4px;
+}
+
+#menu input[type="range"] {
+  width: 100%;
+  accent-color: #7de3cf;
+  cursor: pointer;
+}
+
+#menu .menu-motions {
+  max-height: 196px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+#menu .menu-empty {
+  margin: 0;
+  padding: 6px 10px;
+  color: #8ea0b8;
+  font-size: 12px;
+}
+
+#menu .menu-presets button.is-active {
+  background: #24344c;
+  color: #7de3cf;
+}
+
+#chat {
+  position: fixed;
+  z-index: 35;
+  left: 52%;
+  top: 38%;
+  width: min(220px, calc(100vw - 24px));
+  transform: translate(-20%, 0);
+  padding: 10px 10px 8px;
+  border-radius: 14px;
+  background: rgba(14, 18, 28, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+  color: #eef4ff;
+  pointer-events: auto;
+}
+
+#chat .chat-log {
+  min-height: 36px;
+  max-height: 96px;
+  overflow: auto;
+  margin-bottom: 8px;
+}
+
+#chat .chat-empty,
+#chat .chat-user,
+#chat .chat-pet {
+  margin: 0 0 4px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+#chat .chat-empty {
+  color: #8ea0b8;
+}
+
+#chat .chat-user {
+  color: #c5d2e4;
+}
+
+#chat .chat-pet {
+  color: #7de3cf;
+}
+
+#chat .chat-form input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: #1a2230;
+  color: #eef4ff;
+  padding: 7px 8px;
+  font: inherit;
+  font-size: 13px;
+}
+
+#chat .chat-form input:focus {
+  outline: 1px solid #7de3cf;
+}
+
+#chat .chat-hint {
+  margin-top: 5px;
+  font-size: 11px;
+  color: #8ea0b8;
+}
+
+@media (max-width: 420px) {
+  #chat {
+    left: 12px;
+    right: 12px;
+    width: auto;
+    transform: none;
+  }
+}

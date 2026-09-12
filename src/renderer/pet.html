@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' file:; style-src 'self' 'unsafe-inline'; img-src 'self' data: file: blob:; connect-src 'self' file: http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; media-src 'self' file: blob:;"
+    />
+    <title>Nori</title>
+    <link rel="icon" href="/assets/icon.png" />
+    <link rel="stylesheet" href="./pet.css" />
+  </head>
+  <body>
+    <div id="stage"></div>
+    <div id="notice" hidden></div>
+    <div id="hud" hidden></div>
+    <div id="menu" hidden></div>
+    <div id="chat" hidden></div>
+    <script src="./pet.js"></script>
+  </body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "modelPath": "C:/Live2D/Hiyori/hiyori_pro_t11.model3.json",
+  "cubismCorePath": "vendor/live2dcubismcore.min.js",
+  "motionsTagsPath": "C:/Live2D/motions/motions.tags.json",
+  "motionsDir": "C:/Live2D/motions",
+  "scale": 1,
+  "clickThrough": false,
+  "debugHud": true,
+  "window": {
+    "width": 420,
+    "height": 560
+  }
+}

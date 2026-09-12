@@ -1,0 +1,30 @@
+{
+  "name": "nori-live2d-pet",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Windows-friendly Electron Live2D desktop pet focused on natural interaction and expression.",
+  "license": "MIT",
+  "author": "Nori",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "npm run build && node launch.js",
+    "preview": "npm run build && node dist/main/preview-server.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "electron": "^34.5.8",
+    "pixi-live2d-display": "0.5.0-beta",
+    "pixi.js": "^7.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "esbuild": "^0.25.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.2"
+  }
+}
