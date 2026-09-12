@@ -6,6 +6,7 @@
   "scale": 1,
   "clickThrough": false,
   "debugHud": true,
+  "agentControlPort": 3927,
   "window": {
     "width": 420,
     "height": 560
