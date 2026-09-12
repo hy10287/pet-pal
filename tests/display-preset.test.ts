@@ -22,9 +22,10 @@ describe("windowHeightForPreset", () => {
   });
 
   it("clamps to MIN_WINDOW_HEIGHT without collapsing every preset", () => {
-    expect(windowHeightForPreset(200, "compact")).toBe(MIN_WINDOW_HEIGHT);
-    expect(windowHeightForPreset(200, "balanced")).toBe(MIN_WINDOW_HEIGHT);
-    expect(windowHeightForPreset(200, "standard")).toBeGreaterThan(MIN_WINDOW_HEIGHT);
+    expect(windowHeightForPreset(100, "full")).toBe(MIN_WINDOW_HEIGHT);
+    expect(windowHeightForPreset(400, "compact")).toBe(MIN_WINDOW_HEIGHT);
+    expect(windowHeightForPreset(400, "balanced")).toBeGreaterThan(MIN_WINDOW_HEIGHT);
+    expect(windowHeightForPreset(400, "standard")).toBeGreaterThan(windowHeightForPreset(400, "balanced"));
   });
 });
 
