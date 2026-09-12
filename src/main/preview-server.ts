@@ -29,34 +29,66 @@ function resolveCubismFile(root: string, configuredPath: string): string {
   return resolveRepoPath(root, configuredPath);
 }
 
+const GROK_POST_PROXY_TIMEOUT_MS = 8_000;
+const GROK_GET_PROXY_TIMEOUT_MS = 5_000;
+
+function writeUpstream(
+  res: import("node:http").ServerResponse,
+  upstream: Response,
+  text: string,
+): void {
+  res.writeHead(upstream.status, {
+    "content-type": upstream.headers.get("content-type") || "application/json; charset=utf-8",
+  });
+  res.end(text);
+}
+
 async function proxyGrokBot(req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse): Promise<void> {
-  if ((req.method ?? "GET").toUpperCase() !== "POST") {
-    res.writeHead(405, { allow: "POST", "content-type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({ error: "use POST JSON" }));
+  const method = (req.method ?? "GET").toUpperCase();
+  const pathOnly = (req.url ?? "/").split("?")[0] ?? "";
+  const { config } = loadAppConfig(ROOT);
+  const targetBase = config.chat.grokBotUrl.replace(/\/+$/, "");
+
+  if (method === "POST" && (pathOnly === "/api/grok-bot" || pathOnly === "/api/grok-bot/")) {
+    const chunks: Buffer[] = [];
+    try {
+      for await (const chunk of req) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      const upstream = await fetch(targetBase, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: Buffer.concat(chunks),
+        signal: AbortSignal.timeout(GROK_POST_PROXY_TIMEOUT_MS),
+      });
+      writeUpstream(res, upstream, await upstream.text());
+    } catch {
+      res.writeHead(502, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: "grok bot unreachable" }));
+    }
     return;
   }
-  const { config } = loadAppConfig(ROOT);
-  const target = config.chat.grokBotUrl;
-  const chunks: Buffer[] = [];
-  try {
-    for await (const chunk of req) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+
+  const resultMatch = pathOnly.match(/^\/api\/grok-bot\/result\/([^/]+)$/);
+  if (method === "GET" && resultMatch) {
+    try {
+      const upstream = await fetch(`${targetBase}/result/${resultMatch[1]}`, {
+        method: "GET",
+        signal: AbortSignal.timeout(GROK_GET_PROXY_TIMEOUT_MS),
+      });
+      writeUpstream(res, upstream, await upstream.text());
+    } catch {
+      res.writeHead(502, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: "grok bot unreachable" }));
     }
-    const upstream = await fetch(target, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: Buffer.concat(chunks),
-      signal: AbortSignal.timeout(config.chat.timeoutMs),
-    });
-    const text = await upstream.text();
-    res.writeHead(upstream.status, {
-      "content-type": upstream.headers.get("content-type") || "application/json; charset=utf-8",
-    });
-    res.end(text);
-  } catch {
-    res.writeHead(502, { "content-type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({ error: "grok bot unreachable" }));
+    return;
   }
+
+  res.writeHead(405, {
+    allow: "POST, GET",
+    "content-type": "application/json; charset=utf-8",
+  });
+  res.end(JSON.stringify({ error: "use POST /api/grok-bot or GET /api/grok-bot/result/:id" }));
 }
 
 function bootstrap(): BootstrapPayload {

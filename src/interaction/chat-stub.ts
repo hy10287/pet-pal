@@ -4,12 +4,15 @@ import type { ChatProvider, EmotionIntent } from "../shared/types";
  * Local chat stub — no network. Swap the handler with `setChatHandler`
  * (Grok Bot HTTP lives in grokbot-client.ts). The contract is:
  *
- *   onUserChat(text) => Promise<{ say?, emotion?, intensity?, motionHint?, variant? }>
+ *   onUserChat(text, onPartial?) => Promise<{ say?, emotion?, intensity?, motionHint?, variant? }>
+ *   Grok Bot may call onPartial with a pending placeholder, then resolve the final reply.
  *
  * This file must stay offline: no fetch, no LLM, no network API.
  */
 
 export interface ChatReply {
+  id?: string;
+  pending?: boolean;
   say?: string;
   emotion?: string;
   intensity?: number;
@@ -19,14 +22,15 @@ export interface ChatReply {
   error?: boolean;
 }
 
-export type OnUserChat = (text: string) => Promise<ChatReply>;
+export type ChatPartialFn = (reply: ChatReply) => void;
+export type OnUserChat = (text: string, onPartial?: ChatPartialFn) => Promise<ChatReply>;
 
 export interface ChatTurn {
   role: "user" | "pet";
   text: string;
 }
 
-export async function defaultOnUserChat(text: string): Promise<ChatReply> {
+export async function defaultOnUserChat(text: string, _onPartial?: ChatPartialFn): Promise<ChatReply> {
   const say = text.trim();
   return {
     say,
@@ -46,8 +50,32 @@ export function getChatHandler(): OnUserChat {
   return handler;
 }
 
-export async function onUserChat(text: string): Promise<ChatReply> {
-  return handler(text);
+export async function onUserChat(text: string, onPartial?: ChatPartialFn): Promise<ChatReply> {
+  return handler(text, onPartial);
+}
+
+export const CHAT_PENDING_SAY = "……";
+
+export function beginChatTurn(history: ChatTurn[], userText: string, pendingSay = CHAT_PENDING_SAY): ChatTurn[] {
+  const started: ChatTurn[] = [
+    ...history,
+    { role: "user", text: userText },
+    { role: "pet", text: pendingSay },
+  ];
+  return started.slice(-16);
+}
+
+/** Update the open pet bubble in place (or append if the user turn is last). */
+export function replaceLastPetText(history: ChatTurn[], reply: ChatReply): ChatTurn[] {
+  const next = history.map((turn) => ({ ...turn }));
+  const last = next[next.length - 1];
+  const say = reply.say?.trim();
+  if (last?.role === "pet") {
+    if (say) last.text = say;
+    return next;
+  }
+  if (say) next.push({ role: "pet", text: say });
+  return next.slice(-16);
 }
 
 export function intentFromChatReply(reply: ChatReply, provider: ChatProvider = "stub"): EmotionIntent {

@@ -1,12 +1,16 @@
 /**
- * Nori ↔ Grok Bot / New Bot JSON contract.
+ * Nori ↔ Grok Bot / New Bot JSON contract (async).
  *
- * POST { grokBotUrl }
+ * POST { grokBotUrl }  e.g. http://127.0.0.1:3937/nori-chat
  *   { "text": string, "sessionId"?: string }
+ *   → 200 { "id", "pending": true, "say": "……", "emotion": "shy", "intensity": 0.35 }
+ *     (milliseconds; inbox write only — do not wait on the agent)
  *
- * Response
- *   { "say"?: string, "emotion"?: string, "intensity"?: number,
- *     "motionHint"?: string, "variant"?: string }
+ * GET { grokBotUrl }/result/{id}
+ *   → 200 final { "say", "emotion", "intensity", "motionHint", "variant" }
+ *   → 200 { "id", "pending": true } while the outbox file is missing
+ *
+ * Client polls GET every ~400–800ms until pending is gone or timeoutMs grace.
  */
 
 export interface GrokBotRequest {
@@ -15,6 +19,8 @@ export interface GrokBotRequest {
 }
 
 export interface GrokBotResponse {
+  id?: string;
+  pending?: boolean;
   say?: string;
   emotion?: string;
   intensity?: number;
@@ -59,17 +65,26 @@ export function parseGrokBotResponse(raw: unknown): GrokBotResponse | null {
   if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
   const data = raw as Record<string, unknown>;
   const response: GrokBotResponse = {};
+  const id = asOptionalString(data.id, ID_MAX);
   const say = asOptionalString(data.say, OPTIONAL_MAX);
   const emotion = asOptionalString(data.emotion, 64);
   const motionHint = asOptionalString(data.motionHint, 128);
   const variant = asOptionalString(data.variant, 128);
   const intensity = asIntensity(data.intensity);
+  if (id) response.id = id;
+  if (data.pending === true) response.pending = true;
   if (say) response.say = say;
   if (emotion) response.emotion = emotion;
   if (motionHint) response.motionHint = motionHint;
   if (variant) response.variant = variant;
   if (intensity != null) response.intensity = intensity;
   return response;
+}
+
+/** `{grokBotUrl}/result/{id}` — used by the client poll, not by POST. */
+export function grokBotResultUrl(grokBotUrl: string, id: string): string {
+  const base = grokBotUrl.replace(/\/+$/, "");
+  return `${base}/result/${encodeURIComponent(id)}`;
 }
 
 export function buildGrokBotRequest(text: string, sessionId?: string, maxChars?: number): GrokBotRequest | null {

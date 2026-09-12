@@ -62,11 +62,11 @@ export type ChatProvider = "stub" | "grokbot";
 export interface ChatConfig {
   /** Master switch: show bubble / accept body-click chat. */
   enabled: boolean;
-  /** stub = local fake reply (no network); grokbot = HTTP POST to hub. */
+  /** stub = local fake reply (no network); grokbot = HTTP POST + poll GET. */
   provider: ChatProvider;
   /** Default http://127.0.0.1:3937/nori-chat */
   grokBotUrl: string;
-  /** Request timeout in ms. Default 15000. */
+  /** Poll grace for GET /result/:id (ms). Default 180000. POST itself is short. */
   timeoutMs: number;
   /** Optional later knob: hint for the remote hub (not sent in v1 body). */
   systemPromptHint?: string;

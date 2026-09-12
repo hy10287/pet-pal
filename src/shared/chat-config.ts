@@ -1,9 +1,10 @@
 import type { ChatConfig, ChatProvider } from "./types";
 
 export const DEFAULT_GROK_BOT_URL = "http://127.0.0.1:3937/nori-chat";
-export const DEFAULT_CHAT_TIMEOUT_MS = 15_000;
+/** Poll grace for GET /nori-chat/result/:id — not the POST block time. */
+export const DEFAULT_CHAT_TIMEOUT_MS = 180_000;
 export const CHAT_TIMEOUT_MIN_MS = 1;
-export const CHAT_TIMEOUT_MAX_MS = 120_000;
+export const CHAT_TIMEOUT_MAX_MS = 300_000;
 export const CHAT_MAX_CHARS_CAP = 2_000;
 
 export const DEFAULT_CHAT_CONFIG: ChatConfig = {

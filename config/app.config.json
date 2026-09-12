@@ -14,6 +14,6 @@
     "enabled": false,
     "provider": "stub",
     "grokBotUrl": "http://127.0.0.1:3937/nori-chat",
-    "timeoutMs": 15000
+    "timeoutMs": 180000
   }
 }

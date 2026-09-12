@@ -1,7 +1,8 @@
 import {
-  appendHistory,
+  beginChatTurn,
   canSendChat,
   onUserChat,
+  replaceLastPetText,
   type ChatReply,
   type ChatTurn,
 } from "../interaction/chat-stub";
@@ -67,16 +68,38 @@ export function bindChatBubble(root: HTMLElement, hooks: ChatBubbleHooks = {}): 
     sending = true;
     const trimmed = text.trim();
     if (input) input.value = "";
+    const grok = hooks.getProvider?.() === "grokbot";
+    if (grok) {
+      history = beginChatTurn(history, trimmed);
+      render();
+      hooks.onReply?.(trimmed, { say: "……", emotion: "shy", intensity: 0.35, pending: true });
+    } else {
+      history = [...history, { role: "user", text: trimmed }];
+      render();
+    }
     try {
-      const reply = await onUserChat(trimmed);
-      history = appendHistory(history, trimmed, reply);
+      let pendingApplied = grok;
+      const reply = await onUserChat(trimmed, (partial) => {
+        history = replaceLastPetText(history, partial);
+        render();
+        if (partial.error) return;
+        if (partial.pending) {
+          if (!pendingApplied) {
+            pendingApplied = true;
+            hooks.onReply?.(trimmed, partial);
+          }
+          return;
+        }
+        hooks.onReply?.(trimmed, partial);
+      });
+      history = replaceLastPetText(history, reply);
       render();
       if (!reply.error) hooks.onReply?.(trimmed, reply);
       const next = root.querySelector("input");
       next?.focus();
     } catch {
       const reply: ChatReply = { say: "对话出错了，稍后再试。", error: true };
-      history = appendHistory(history, trimmed, reply);
+      history = replaceLastPetText(history, reply);
       render();
     } finally {
       sending = false;

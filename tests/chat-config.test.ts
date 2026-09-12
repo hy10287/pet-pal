@@ -53,7 +53,7 @@ describe("parseChatConfig", () => {
   });
 
   it("clamps timeout and maxChars", () => {
-    expect(parseChatConfig({ timeoutMs: 999999 }).timeoutMs).toBe(120_000);
+    expect(parseChatConfig({ timeoutMs: 999999 }).timeoutMs).toBe(300_000);
     expect(parseChatConfig({ timeoutMs: "12000" }).timeoutMs).toBe(12_000);
     expect(parseChatConfig({ maxChars: 0 }).maxChars).toBeUndefined();
     expect(parseChatConfig({ maxChars: 9000 }).maxChars).toBe(2000);

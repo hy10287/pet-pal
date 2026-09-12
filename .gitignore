@@ -48,5 +48,8 @@ assets/**/*.physics3.json
 assets/**/*.2048/
 assets/**/motions/
 
+# local Grok Bot / webhook inbox+outbox (never commit secrets or chat dumps)
+.nori-chat/
+
 # scratch json dumps
 _*.json

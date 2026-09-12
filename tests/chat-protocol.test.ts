@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   buildGrokBotRequest,
+  grokBotResultUrl,
   parseGrokBotRequest,
   parseGrokBotResponse,
 } from "../src/interaction/chat-protocol";
-import { intentFromChatReply, defaultOnUserChat, canSendChat } from "../src/interaction/chat-stub";
+import {
+  beginChatTurn,
+  canSendChat,
+  defaultOnUserChat,
+  intentFromChatReply,
+  replaceLastPetText,
+} from "../src/interaction/chat-stub";
 import {
   CHAT_ERROR_NETWORK,
   CHAT_ERROR_TIMEOUT,
@@ -61,6 +68,18 @@ describe("parseGrokBotResponse", () => {
     expect(parseGrokBotResponse("ok")).toBeNull();
     expect(parseGrokBotResponse([{ say: "x" }])).toBeNull();
   });
+
+  it("keeps pending + id for the async poll", () => {
+    expect(parseGrokBotResponse({ id: "abc", pending: true, say: "……" })).toEqual({
+      id: "abc",
+      pending: true,
+      say: "……",
+    });
+    expect(parseGrokBotResponse({ id: "abc", pending: false })).toEqual({ id: "abc" });
+    expect(grokBotResultUrl("http://127.0.0.1:3937/nori-chat/", "a b")).toBe(
+      "http://127.0.0.1:3937/nori-chat/result/a%20b",
+    );
+  });
 });
 
 describe("intentFromChatReply", () => {
@@ -90,6 +109,18 @@ describe("chat stub", () => {
     const reply = await defaultOnUserChat("  ping ");
     expect(reply.say).toBe("ping");
     expect(reply.emotion).toBe("acknowledge");
+  });
+
+  it("updates the same pet bubble in place", () => {
+    const started = beginChatTurn([], "你好");
+    expect(started).toEqual([
+      { role: "user", text: "你好" },
+      { role: "pet", text: "……" },
+    ]);
+    expect(replaceLastPetText(started, { say: "嗯！" })).toEqual([
+      { role: "user", text: "你好" },
+      { role: "pet", text: "嗯！" },
+    ]);
   });
 });
 
@@ -133,5 +164,62 @@ describe("requestGrokBot", () => {
         json: async () => "not-an-object",
       }) as Response),
     ).resolves.toEqual({ say: CHAT_ERROR_NETWORK, error: true });
+  });
+
+  it("shows the POST placeholder then polls GET /result/:id", async () => {
+    let posts = 0;
+    let gets = 0;
+    const fetchImpl = async (url: string, init?: RequestInit) => {
+      if ((init?.method ?? "GET") === "POST") {
+        posts += 1;
+        expect(url).toBe(cfg.grokBotUrl);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ id: "turn-1", pending: true, say: "……", emotion: "shy", intensity: 0.35 }),
+        } as Response;
+      }
+      expect(url).toBe("http://127.0.0.1:3937/nori-chat/result/turn-1");
+      gets += 1;
+      if (gets < 3) {
+        return { ok: true, status: 200, json: async () => ({ id: "turn-1", pending: true }) } as Response;
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ say: "嗯", emotion: "happy", intensity: 0.7, motionHint: "wave" }),
+      } as Response;
+    };
+    const partials: Array<{ pending?: boolean; say?: string }> = [];
+    const reply = await requestGrokBot(cfg, "你好", "sess", fetchImpl, {
+      onPartial: (partial) => partials.push(partial),
+      pollIntervalMs: 1,
+    });
+    expect(posts).toBe(1);
+    expect(gets).toBe(3);
+    expect(partials[0]).toMatchObject({ id: "turn-1", pending: true, say: "……", emotion: "shy" });
+    expect(reply).toEqual({
+      say: "嗯",
+      emotion: "happy",
+      intensity: 0.7,
+      motionHint: "wave",
+    });
+  });
+
+  it("fails once after poll grace if outbox never appears", async () => {
+    const fetchImpl = async (_url: string, init?: RequestInit) => {
+      if ((init?.method ?? "GET") === "POST") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ id: "late", pending: true, say: "……" }),
+        } as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({ id: "late", pending: true }) } as Response;
+    };
+    const reply = await requestGrokBot({ ...cfg, timeoutMs: 25 }, "hi", undefined, fetchImpl, {
+      pollIntervalMs: 5,
+    });
+    expect(reply).toEqual({ say: CHAT_ERROR_TIMEOUT, error: true });
   });
 });
