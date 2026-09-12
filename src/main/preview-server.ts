@@ -29,6 +29,36 @@ function resolveCubismFile(root: string, configuredPath: string): string {
   return resolveRepoPath(root, configuredPath);
 }
 
+async function proxyGrokBot(req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse): Promise<void> {
+  if ((req.method ?? "GET").toUpperCase() !== "POST") {
+    res.writeHead(405, { allow: "POST", "content-type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ error: "use POST JSON" }));
+    return;
+  }
+  const { config } = loadAppConfig(ROOT);
+  const target = config.chat.grokBotUrl;
+  const chunks: Buffer[] = [];
+  try {
+    for await (const chunk of req) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    const upstream = await fetch(target, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: Buffer.concat(chunks),
+      signal: AbortSignal.timeout(config.chat.timeoutMs),
+    });
+    const text = await upstream.text();
+    res.writeHead(upstream.status, {
+      "content-type": upstream.headers.get("content-type") || "application/json; charset=utf-8",
+    });
+    res.end(text);
+  } catch {
+    res.writeHead(502, { "content-type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ error: "grok bot unreachable" }));
+  }
+}
+
 function bootstrap(): BootstrapPayload {
   const { config } = loadAppConfig(ROOT);
   const cubism = resolveCubismFile(ROOT, config.cubismCorePath);
@@ -60,6 +90,12 @@ const server = createServer((req, res) => {
   if (url.startsWith("/api/bootstrap")) {
     res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
     res.end(JSON.stringify(bootstrap()));
+    return;
+  }
+
+  // Browser preview is cross-origin to grokBotUrl; Electron posts directly.
+  if (url.startsWith("/api/grok-bot")) {
+    void proxyGrokBot(req, res);
     return;
   }
 

@@ -7,6 +7,7 @@ import {
   type AgentPlayedSummary,
   isAgentControlEnabled,
 } from "../shared/agent-control";
+import { parseChatConfig } from "../shared/chat-config";
 import { displayWindowSize, parseDisplayPreset, resolveFullWindow } from "../shared/display-preset";
 import {
   fileUrlIfExists,
@@ -183,6 +184,7 @@ app.whenReady().then(() => {
   ipcMain.handle("nori:save-config", (_event, patch: Partial<AppConfig>) => {
     const next = { ...configState.config, ...patch, window: fullWindow };
     if (patch.displayPreset) next.displayPreset = parseDisplayPreset(patch.displayPreset);
+    if (patch.chat) next.chat = parseChatConfig({ ...configState.config.chat, ...patch.chat });
     configState = { config: next, source: persistPath };
     saveAppConfig(persistPath, configState.config);
     return configState.config;

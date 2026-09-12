@@ -3,6 +3,7 @@ import { dirname, isAbsolute, join } from "node:path";
 import type { AppConfig, MotionCatalog } from "../shared/types";
 import { parseDisplayPreset, resolveFullWindow } from "../shared/display-preset";
 import { DEFAULT_AGENT_CONTROL_PORT, parseControlPort } from "../shared/agent-control";
+import { DEFAULT_CHAT_CONFIG, parseChatConfig } from "../shared/chat-config";
 import { parseCatalog } from "../emotion/catalog";
 
 export const DEFAULT_CONFIG: AppConfig = {
@@ -16,6 +17,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   displayPreset: "balanced",
   window: { width: 420, height: 560 },
   agentControlPort: DEFAULT_AGENT_CONTROL_PORT,
+  chat: { ...DEFAULT_CHAT_CONFIG },
 };
 
 
@@ -39,7 +41,13 @@ function mergeConfig(raw: unknown): AppConfig {
     scale: Math.max(0.6, Math.min(1.8, Number(data.scale) || 1)),
     displayPreset: parseDisplayPreset(data.displayPreset),
     agentControlPort: port.ok ? port.value : DEFAULT_AGENT_CONTROL_PORT,
+    chat: parseChatConfig(data.chat),
   };
+}
+
+/** Exported for unit tests. */
+export function parseAppConfig(raw: unknown): AppConfig {
+  return mergeConfig(raw);
 }
 
 export function loadAppConfig(root: string, userData?: string): { config: AppConfig; source: string } {
@@ -53,7 +61,14 @@ export function loadAppConfig(root: string, userData?: string): { config: AppCon
     if (!existsSync(source)) continue;
     return { config: mergeConfig(loadJson(source)), source };
   }
-  return { config: { ...DEFAULT_CONFIG }, source: "defaults" };
+  return {
+    config: {
+      ...DEFAULT_CONFIG,
+      window: { ...DEFAULT_CONFIG.window },
+      chat: { ...DEFAULT_CHAT_CONFIG },
+    },
+    source: "defaults",
+  };
 }
 
 export function saveAppConfig(target: string, config: AppConfig): void {
