@@ -54,7 +54,7 @@ curl -sS -X POST http://127.0.0.1:3927/intent \
 ```
 
 - `enabled`：总开关。关 = 点身体只播点头/歪头（现在的默认）。开 = 点身体弹出对话气泡。
-- `provider`: `stub` 走本地假回复（`interaction/chat-stub.ts`，不联网）；`grokbot` 向 `grokBotUrl` 发 HTTP。
+- `provider`: `stub` 走本地假回复（`interaction/chat-stub.ts`，不联网）；`grokbot` 向 `grokBotUrl` 发 HTTP。Electron 直连该地址；`npm run preview` 经同源 `/api/grok-bot` 转发，避开浏览器 CORS。
 - 可选以后再调：`systemPromptHint`、`maxChars`。
 
 ### Grok Bot 协议

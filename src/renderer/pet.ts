@@ -117,7 +117,8 @@ async function main(): Promise<void> {
   const chatSessionId = `nori-${Date.now().toString(36)}`;
   const applyChatHandler = () => {
     if (chatConfig.provider === "grokbot") {
-      setChatHandler(createGrokBotHandler(chatConfig, chatSessionId));
+      const grokBotUrl = preview ? "/api/grok-bot" : chatConfig.grokBotUrl;
+      setChatHandler(createGrokBotHandler({ ...chatConfig, grokBotUrl }, chatSessionId));
     } else {
       setChatHandler(null);
     }
