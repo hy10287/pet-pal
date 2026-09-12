@@ -1,4 +1,5 @@
-import type { CatalogItem, DisplayPresetId } from "../shared/types";
+import { chatEnabledLabel, chatProviderLabel } from "../shared/chat-config";
+import type { CatalogItem, ChatProvider, DisplayPresetId } from "../shared/types";
 import { DISPLAY_PRESETS } from "./display-crop";
 
 export interface MenuHooks {
@@ -12,6 +13,8 @@ export type MenuCommand =
   | { type: "random" }
   | { type: "toggle-hud" }
   | { type: "toggle-click-through" }
+  | { type: "toggle-chat" }
+  | { type: "toggle-chat-provider" }
   | { type: "quit" }
   | { type: "scale"; value: number }
   | { type: "display-preset"; id: DisplayPresetId }
@@ -22,6 +25,8 @@ export interface MenuState {
   hudOn: boolean;
   clickThrough: boolean;
   displayPreset: DisplayPresetId;
+  chatEnabled: boolean;
+  chatProvider: ChatProvider;
   motions: { id: string; label: string }[];
 }
 
@@ -145,6 +150,21 @@ export function renderMenu(
   menu.replaceChildren();
   menu.classList.add("nori-menu");
 
+  let chatEnabled = state.chatEnabled;
+  let chatProvider = state.chatProvider;
+  const chatToggle = actionButton(chatEnabledLabel(chatEnabled), () => {
+    chatEnabled = !chatEnabled;
+    chatToggle.textContent = chatEnabledLabel(chatEnabled);
+    chatToggle.setAttribute("aria-pressed", chatEnabled ? "true" : "false");
+    onCommand({ type: "toggle-chat" });
+  });
+  chatToggle.setAttribute("aria-pressed", chatEnabled ? "true" : "false");
+  const providerToggle = actionButton(chatProviderLabel(chatProvider), () => {
+    chatProvider = chatProvider === "grokbot" ? "stub" : "grokbot";
+    providerToggle.textContent = chatProviderLabel(chatProvider);
+    onCommand({ type: "toggle-chat-provider" });
+  });
+
   menu.append(
     section("交互", [
       actionButton("待机", () => {
@@ -155,6 +175,8 @@ export function renderMenu(
         hide();
         onCommand({ type: "random" });
       }),
+      chatToggle,
+      providerToggle,
     ]),
   );
 

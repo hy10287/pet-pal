@@ -9,6 +9,7 @@ const LABELS: Record<string, string> = {
   scale: "大小",
   motion: "动作",
   through: "穿透",
+  chat: "对话",
 };
 
 export function hudSnapshot(state: DirectorDebugState): string {
@@ -22,6 +23,8 @@ export function hudSnapshot(state: DirectorDebugState): string {
     state.scale.toFixed(2),
     state.motionSource ?? "",
     state.clickThrough ? "on" : "off",
+    state.chatEnabled ? "chat-on" : "chat-off",
+    state.chatProvider ?? "",
   ].join("|");
 }
 
@@ -47,6 +50,10 @@ export function renderHud(el: HTMLElement, state: DirectorDebugState, visible: b
     ["scale", `${state.scale.toFixed(2)}（仅菜单调节）`],
     ["motion", state.motionSource === "file" ? "file · 身体 .motion3" : "params · 只调参数"],
     ["through", state.clickThrough ? "开（点不到角色，用托盘）" : "关"],
+    [
+      "chat",
+      `${state.chatEnabled ? "开" : "关"} · ${state.chatProvider === "grokbot" ? "Grok Bot" : "本地 stub"}`,
+    ],
   ];
 
   el.innerHTML = `
@@ -68,6 +75,7 @@ export function renderHud(el: HTMLElement, state: DirectorDebugState, visible: b
         <li><b>大小</b>：你设的缩放；拖窗口不会改这个值。</li>
         <li><b>动作</b>：file=播身体文件，params=只用参数演。</li>
         <li><b>穿透</b>：开着时点不到角色，请用任务栏或托盘。</li>
+        <li><b>对话</b>：右键菜单开关。开着时点身体出气泡；关着只播点头。</li>
       </ul>
     </details>
   `;

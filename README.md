@@ -38,7 +38,46 @@ curl -sS -X POST http://127.0.0.1:3927/intent \
   -d '{"emotion":"happy","intensity":0.7,"motionHint":"smile","say":"hello"}'
 ```
 
-成功：`{"ok":true,"played":{...}}`。`say` 目前只记日志（聊天气泡 UI 未做）。可选字段：`variant`、`source`。可选 WebSocket：`ws://127.0.0.1:3927/intent`，报文同 JSON。
+成功：`{"ok":true,"played":{...}}`。可选字段：`variant`、`source`。可选 WebSocket：`ws://127.0.0.1:3927/intent`，报文同 JSON。对话气泡由下面的 **对话开关** 负责，不改这个控制口。
+
+## 对话（可选 · stub / Grok Bot）
+
+右键菜单 **「对话：开 / 关」**，可选 **「Grok Bot / 本地 stub」**。状态写入 `chat` 并经 `saveConfig` 持久化。所有地址和超时都在配置里，方便以后调。
+
+```json
+"chat": {
+  "enabled": false,
+  "provider": "stub",
+  "grokBotUrl": "http://127.0.0.1:3937/nori-chat",
+  "timeoutMs": 15000
+}
+```
+
+- `enabled`：总开关。关 = 点身体只播点头/歪头（现在的默认）。开 = 点身体弹出对话气泡。
+- `provider`: `stub` 走本地假回复（`interaction/chat-stub.ts`，不联网）；`grokbot` 向 `grokBotUrl` 发 HTTP。
+- 可选以后再调：`systemPromptHint`、`maxChars`。
+
+### Grok Bot 协议
+
+Nori `POST` JSON 到 `chat.grokBotUrl`（默认 `http://127.0.0.1:3937/nori-chat`）：
+
+```json
+{ "text": "你好", "sessionId": "nori-…" }
+```
+
+期望响应：
+
+```json
+{
+  "say": "嗯！",
+  "emotion": "acknowledge",
+  "intensity": 0.55,
+  "motionHint": "nod",
+  "variant": "nod"
+}
+```
+
+成功：有 `say` 就显示在气泡里；`emotion` / `intensity` / `motionHint`（或 `variant`）走现有 `MotionDirector` 播放路径（与 agent-control 同一套 `beginPlay`，不改 `/intent` API）。超时或网络/解析失败：气泡显示一句短中文错误，进程不崩。无 TTS。
 
 ## 放置 Cubism Core（不随仓库分发）
 
@@ -100,10 +139,10 @@ Demo 的 sample catalog 即使没有真实 motion 文件，也会用参数混合
 | 左键拖角色 | 移动窗口 |
 | 单击头/脸 | 害羞或开心 |
 | 双击 | 兴奋 / 闪光（`eventOnly` 可入选） |
-| 单击身体 | 点头或歪头回应 |
+| 单击身体 | 对话关：点头/歪头。对话开：弹出气泡 |
 | 悬停 1.2s | 好奇注视 |
 | 右键菜单 · 缩放 | 缩放 0.6–1.8（仅菜单，无滚轮缩放） |
-| 右键 | 待机 / 随机情绪 / 穿透 / HUD / 退出 |
+| 右键 | 待机 / 随机 / 对话开关 / Grok Bot·stub / 穿透 / HUD / 退出 |
 | 鼠标移动 | `ParamAngle*` / `ParamEyeBall*` 阻尼跟随 |
 | `H` | 调试 HUD（当前 intent + face/body id） |
 | 托盘 | 退出等 |
@@ -142,18 +181,22 @@ Electron 主进程
 ├── launch.js              清除 ELECTRON_RUN_AS_NODE 后拉起 Electron
 ├── src/main/index.ts      透明置顶窗 / IPC / 托盘 / agent 控制口
 ├── src/main/agent-control-server.ts   127.0.0.1 HTTP + 可选 WS
-├── src/main/config.ts     modelPath / motionsTagsPath / motionsDir
+├── src/main/config.ts     modelPath / motionsTagsPath / motionsDir / chat
 └── src/main/preview-server.ts   浏览器预览
 
 渲染进程
-├── src/renderer/pet.ts           交互循环、缩放、HUD
+├── src/renderer/pet.ts           交互循环、缩放、HUD、对话开关
+├── src/renderer/chat-bubble.ts   气泡输入
 ├── src/renderer/live2d-actor.ts  PIXI v7 + pixi-live2d-display/cubism4
 └── src/renderer/fallback-actor.ts 原创占位角色
 
 情绪 / 交互（可单测）
 ├── emotion/retrieve.ts    retrieve(intent) 计分
 ├── emotion/director.ts    双层播放 + idle + 冷却
-└── interaction/router.ts  本地事件 → EmotionIntent（预留 API classifier stub）
+├── interaction/router.ts  本地事件 → EmotionIntent
+├── interaction/chat-stub.ts     本地假回复（不联网）
+├── interaction/chat-protocol.ts  Grok Bot 请求/响应校验
+└── interaction/grokbot-client.ts  POST grokBotUrl（超时不崩）
 ```
 
 ```mermaid
@@ -188,7 +231,7 @@ flowchart LR
 - 本地 intent router（Demo 不需要云端 AI）
 - Idle director、交叉淡化、冷却防抖、调试 HUD
 - TypeScript 模块边界：`main/` `renderer/` `emotion/retrieve.ts` `interaction/router.ts`
-- 无截屏、无 TTS、无聊天； Cubism Core 与版权模型都不进仓库
+- 无截屏、无 TTS；对话默认关，可选本地 stub 或本机 Grok Bot。Cubism Core 与版权模型都不进仓库
 
 ## 技术栈
 
