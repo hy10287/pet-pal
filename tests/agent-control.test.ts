@@ -193,7 +193,8 @@ describe("agent control HTTP / WS server", () => {
     expect(wrongType.status).toBe(415);
   });
 
-  it("accepts the same JSON over WebSocket", async () => {
+  // Global WebSocket is Node 21+. GitHub Actions CI is Node 20.
+  it.skipIf(typeof globalThis.WebSocket !== "function")("accepts the same JSON over WebSocket", async () => {
     const handle = await listen();
     const ws = new WebSocket(`ws://127.0.0.1:${handle.port}/intent`);
     const reply = await new Promise<string>((resolve, reject) => {
