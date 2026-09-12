@@ -12,11 +12,12 @@ export interface NoriBridge {
   setDisplayPreset: (
     preset: DisplayPresetId,
   ) => Promise<{ width: number; height: number; displayPreset: DisplayPresetId }>;
-  setUiChrome: (state: { hudOn?: boolean; menuOpen?: boolean }) => Promise<{
+  setUiChrome: (state: { hudOn?: boolean; menuOpen?: boolean; menuHeight?: number }) => Promise<{
     width: number;
     height: number;
     hudOn: boolean;
     menuOpen: boolean;
+    menuHeight?: number;
   }>;
   moveBy: (dx: number, dy: number) => void;
   dragStart: () => void;
@@ -24,7 +25,7 @@ export interface NoriBridge {
   dragEnd: () => void;
   setClickThrough: (on: boolean) => Promise<void>;
   setHoverOpaque: (opaque: boolean) => void;
-  setMenuOpen: (open: boolean) => void;
+  setMenuOpen: (open: boolean, menuHeight?: number) => void;
   getCursorLocal: () => Promise<{ x: number; y: number; inWindow: boolean; near: boolean } | null>;
   quit: () => void;
   onCommand: (handler: (command: NoriRendererCommand) => void) => () => void;
@@ -44,7 +45,7 @@ const bridge: NoriBridge = {
   dragEnd: () => ipcRenderer.send("nori:drag-end"),
   setClickThrough: (on) => ipcRenderer.invoke("nori:click-through", on),
   setHoverOpaque: (opaque) => ipcRenderer.send("nori:hover-opaque", opaque),
-  setMenuOpen: (open) => ipcRenderer.send("nori:menu-open", open),
+  setMenuOpen: (open, menuHeight) => ipcRenderer.send("nori:menu-open", open, menuHeight),
   getCursorLocal: () => ipcRenderer.invoke("nori:cursor-local"),
   quit: () => ipcRenderer.send("nori:quit"),
   onCommand: (handler) => {

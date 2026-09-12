@@ -1,5 +1,7 @@
 import { BrowserWindow, screen } from "electron";
 import { join } from "node:path";
+import { MIN_WINDOW_HEIGHT } from "../shared/display-preset";
+import { applyLockedSize, sameSize } from "./window-move";
 
 export interface PetWindowOptions {
   width: number;
@@ -45,7 +47,7 @@ export function createPetWindow(options: PetWindowOptions): BrowserWindow {
     },
   });
 
-  win.setMinimumSize(Math.min(width, 200), 140);
+  win.setMinimumSize(Math.min(width, 200), MIN_WINDOW_HEIGHT);
   win.setAlwaysOnTop(true, "screen-saver");
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   win.setMenuBarVisibility(false);
@@ -61,6 +63,32 @@ export function createPetWindow(options: PetWindowOptions): BrowserWindow {
 
   // Size lock / will-resize owned by main/index.ts (supports display-preset crop).
   return win;
+}
+
+/**
+ * Apply a locked size on a typically non-resizable window.
+ * Temporarily allows resize, lowers min size so shrinks are not clamped, then restores.
+ */
+export function commitPetWindowSize(
+  win: BrowserWindow,
+  size: { width: number; height: number },
+): void {
+  if (win.isDestroyed()) return;
+  const next = applyLockedSize(win.getBounds(), size);
+  const wasResizable = win.isResizable();
+  try {
+    win.setMinimumSize(1, MIN_WINDOW_HEIGHT);
+    if (!wasResizable) win.setResizable(true);
+    win.setBounds(next, false);
+    if (!sameSize(win.getBounds(), size)) {
+      win.setSize(size.width, size.height);
+    }
+  } finally {
+    if (!win.isDestroyed()) {
+      if (!wasResizable) win.setResizable(false);
+      win.setMinimumSize(Math.min(size.width, 200), MIN_WINDOW_HEIGHT);
+    }
+  }
 }
 
 export function applyClickThrough(win: BrowserWindow, ignore: boolean): void {

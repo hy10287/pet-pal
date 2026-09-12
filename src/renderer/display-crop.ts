@@ -6,6 +6,8 @@ import {
   presetById,
   windowHeightForPreset,
   croppedWindowSize,
+  displayWindowSize,
+  resolveFullWindow,
 } from "../shared/display-preset";
 import { fitScale, lockFitted } from "./fit-scale";
 
@@ -17,6 +19,8 @@ export {
   presetById,
   windowHeightForPreset,
   croppedWindowSize,
+  displayWindowSize,
+  resolveFullWindow,
 };
 
 export const MODEL_ANCHOR_Y = 0.62;
@@ -80,17 +84,30 @@ export function topPinFromLocalTop(
   };
 }
 
-export function applyPreviewStageCrop(
+/** Lock #stage to the crop so a taller HUD/menu window cannot stretch the character view. */
+export function applyStageCrop(
+  stage: HTMLElement | null,
   full: { width: number; height: number },
   preset: DisplayPresetId,
 ): { width: number; height: number } {
   const size = croppedWindowSize(full, preset);
-  const stage = document.getElementById("stage");
   if (stage) {
     stage.style.width = `${size.width}px`;
     stage.style.height = `${size.height}px`;
+    stage.style.minWidth = `${size.width}px`;
+    stage.style.maxWidth = `${size.width}px`;
+    stage.style.minHeight = `${size.height}px`;
+    stage.style.maxHeight = `${size.height}px`;
     stage.style.overflow = "hidden";
   }
+  return size;
+}
+
+export function applyPreviewStageCrop(
+  full: { width: number; height: number },
+  preset: DisplayPresetId,
+): { width: number; height: number } {
+  const size = applyStageCrop(document.getElementById("stage"), full, preset);
   document.body.style.height = `${size.height}px`;
   document.body.style.overflow = "hidden";
   window.dispatchEvent(new Event("resize"));

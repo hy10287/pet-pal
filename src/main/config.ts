@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import type { AppConfig, MotionCatalog } from "../shared/types";
-import { parseDisplayPreset } from "../shared/display-preset";
+import { parseDisplayPreset, resolveFullWindow } from "../shared/display-preset";
 import { DEFAULT_AGENT_CONTROL_PORT, parseControlPort } from "../shared/agent-control";
 import { parseCatalog } from "../emotion/catalog";
 
@@ -35,7 +35,7 @@ function mergeConfig(raw: unknown): AppConfig {
   return {
     ...DEFAULT_CONFIG,
     ...data,
-    window: { ...DEFAULT_CONFIG.window, ...(data.window ?? {}) },
+    window: resolveFullWindow({ ...DEFAULT_CONFIG.window, ...(data.window ?? {}) }),
     scale: Math.max(0.6, Math.min(1.8, Number(data.scale) || 1)),
     displayPreset: parseDisplayPreset(data.displayPreset),
     agentControlPort: port.ok ? port.value : DEFAULT_AGENT_CONTROL_PORT,
