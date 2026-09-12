@@ -41,8 +41,8 @@ export function createPetWindow(options: PetWindowOptions): BrowserWindow {
       preload: options.preload,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
-      webSecurity: true,
+      sandbox: false, // preload + file model loads; revisit with custom protocol
+      webSecurity: false, // file:// Live2D models/textures; custom protocol later
       backgroundThrottling: false,
     },
   });
@@ -107,3 +107,4 @@ export function rendererHtml(): string {
 export function preloadPath(): string {
   return join(__dirname, "preload.js");
 }
+
