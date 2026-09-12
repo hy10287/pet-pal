@@ -1,4 +1,6 @@
+import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { createConnection } from "node:net";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { MotionDirector } from "../src/emotion/director";
@@ -14,8 +16,87 @@ import {
   resolveControlBind,
   summarizePlayed,
 } from "../src/shared/agent-control";
-import { startAgentControlServer, type AgentControlHandle } from "../src/main/agent-control-server";
+import {
+  encodeWsFrame,
+  startAgentControlServer,
+  type AgentControlHandle,
+} from "../src/main/agent-control-server";
 import type { MotionCatalog } from "../src/shared/types";
+
+/** Node 20 CI has no global WebSocket; speak RFC 6455 over net.Socket. */
+function sendWsJson(port: number, payload: unknown): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const key = randomBytes(16).toString("base64");
+    const socket = createConnection({ host: "127.0.0.1", port });
+    const timer = setTimeout(() => {
+      socket.destroy();
+      reject(new Error("ws timeout"));
+    }, 3000);
+    let buf = Buffer.alloc(0);
+    let upgraded = false;
+    const finish = (error: Error | null, value?: unknown) => {
+      clearTimeout(timer);
+      socket.destroy();
+      if (error) reject(error);
+      else resolve(value);
+    };
+    socket.on("error", (error) => finish(error));
+    socket.on("connect", () => {
+      socket.write(
+        [
+          "GET /intent HTTP/1.1",
+          `Host: 127.0.0.1:${port}`,
+          "Upgrade: websocket",
+          "Connection: Upgrade",
+          `Sec-WebSocket-Key: ${key}`,
+          "Sec-WebSocket-Version: 13",
+          "",
+          "",
+        ].join("\r\n"),
+      );
+    });
+    socket.on("data", (chunk) => {
+      buf = Buffer.concat([buf, chunk]);
+      if (!upgraded) {
+        const split = buf.indexOf("\r\n\r\n");
+        if (split < 0) return;
+        const head = buf.subarray(0, split).toString("utf8");
+        buf = buf.subarray(split + 4);
+        if (!/^HTTP\/1\.1 101/i.test(head)) {
+          finish(new Error(`ws upgrade failed: ${head.split("\r\n")[0] ?? head}`));
+          return;
+        }
+        upgraded = true;
+        socket.write(encodeWsFrame(Buffer.from(JSON.stringify(payload), "utf8"), 0x1, true));
+      }
+      const text = decodeUnmaskedTextFrame(buf);
+      if (text == null) return;
+      try {
+        finish(null, JSON.parse(text));
+      } catch (error) {
+        finish(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  });
+}
+
+function decodeUnmaskedTextFrame(buffer: Buffer): string | null {
+  if (buffer.length < 2) return null;
+  const opcode = buffer[0]! & 0x0f;
+  const masked = Boolean(buffer[1]! & 0x80);
+  let len = buffer[1]! & 0x7f;
+  let offset = 2;
+  if (len === 126) {
+    if (buffer.length < 4) return null;
+    len = buffer.readUInt16BE(2);
+    offset = 4;
+  } else if (len === 127) {
+    return null;
+  }
+  if (masked || opcode !== 0x1) return null;
+  if (buffer.length < offset + len) return null;
+  return buffer.subarray(offset, offset + len).toString("utf8");
+}
 
 function loadSample(): MotionCatalog {
   const raw = JSON.parse(
@@ -195,23 +276,11 @@ describe("agent control HTTP / WS server", () => {
 
   it("accepts the same JSON over WebSocket", async () => {
     const handle = await listen();
-    const ws = new WebSocket(`ws://127.0.0.1:${handle.port}/intent`);
-    const reply = await new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("ws timeout")), 3000);
-      ws.addEventListener("error", (event) => {
-        clearTimeout(timer);
-        reject(event);
-      });
-      ws.addEventListener("open", () => {
-        ws.send(JSON.stringify({ emotion: "curious", intensity: 0.4, motionHint: "look" }));
-      });
-      ws.addEventListener("message", (event) => {
-        clearTimeout(timer);
-        resolve(String(event.data));
-        ws.close();
-      });
-    });
-    const body = JSON.parse(reply) as { ok: boolean; played?: { emotion: string } };
+    const body = (await sendWsJson(handle.port, {
+      emotion: "curious",
+      intensity: 0.4,
+      motionHint: "look",
+    })) as { ok: boolean; played?: { emotion: string } };
     expect(body.ok).toBe(true);
     expect(body.played?.emotion).toBe("curious");
   });
