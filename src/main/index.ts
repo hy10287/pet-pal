@@ -7,7 +7,7 @@ import {
   type AgentPlayedSummary,
   isAgentControlEnabled,
 } from "../shared/agent-control";
-import { croppedWindowSize, parseDisplayPreset } from "../shared/display-preset";
+import { displayWindowSize, parseDisplayPreset, resolveFullWindow } from "../shared/display-preset";
 import {
   fileUrlIfExists,
   loadAppConfig,
@@ -17,9 +17,9 @@ import {
   saveAppConfig,
 } from "./config";
 import { startAgentControlServer, type AgentControlHandle, newIntentRequestId } from "./agent-control-server";
-import { applyClickThrough, createPetWindow, preloadPath, rendererHtml } from "./window";
+import { applyClickThrough, commitPetWindowSize, createPetWindow, preloadPath, rendererHtml } from "./window";
 import { createTray } from "./tray";
-import { applyLockedSize, movedBounds, placeAt, sameSize } from "./window-move";
+import { movedBounds, placeAt, sameSize } from "./window-move";
 
 const ROOT = join(__dirname, "../..");
 const preview = process.argv.includes("--preview");
@@ -94,8 +94,15 @@ app.whenReady().then(() => {
     configState = userLoaded;
   }
 
-  const fullWindow = { ...configState.config.window };
-  const startSize = croppedWindowSize(fullWindow, parseDisplayPreset(configState.config.displayPreset));
+  const fullWindow = resolveFullWindow(configState.config.window);
+  if (fullWindow.width !== configState.config.window.width || fullWindow.height !== configState.config.window.height) {
+    configState = {
+      config: { ...configState.config, window: fullWindow },
+      source: persistPath,
+    };
+    saveAppConfig(persistPath, configState.config);
+  }
+  const startSize = displayWindowSize(fullWindow, parseDisplayPreset(configState.config.displayPreset));
   const win = createPetWindow({
     width: startSize.width,
     height: startSize.height,
@@ -108,25 +115,36 @@ app.whenReady().then(() => {
 
   const lockedSize = { ...startSize };
   let applyingPreset = false;
+  let applyGen = 0;
   let menuOpen = false;
+  let menuHeight = 0;
   let hudOn = false;
   let dragging = false;
   let dragOffset = { x: 0, y: 0 };
 
-  const cropSize = () => croppedWindowSize(fullWindow, parseDisplayPreset(configState.config.displayPreset));
+  const beginApply = () => {
+    applyingPreset = true;
+    const gen = ++applyGen;
+    return () => {
+      setImmediate(() => {
+        if (gen === applyGen) applyingPreset = false;
+      });
+    };
+  };
 
   const applyWindowChrome = () => {
     if (win.isDestroyed()) return;
-    const crop = cropSize();
-    const useFull = hudOn || menuOpen;
-    lockedSize.width = fullWindow.width;
-    lockedSize.height = useFull ? fullWindow.height : crop.height;
-    applyingPreset = true;
-    const bounds = win.getBounds();
-    win.setBounds(applyLockedSize(bounds, lockedSize));
-    applyingPreset = false;
+    const size = displayWindowSize(fullWindow, parseDisplayPreset(configState.config.displayPreset), {
+      hudOn,
+      menuOpen,
+      menuHeight,
+    });
+    lockedSize.width = size.width;
+    lockedSize.height = size.height;
+    const end = beginApply();
+    commitPetWindowSize(win, lockedSize);
+    end();
   };
-
 
   const restoreClickThrough = () => {
     if (win.isDestroyed()) return;
@@ -137,15 +155,18 @@ app.whenReady().then(() => {
     applyClickThrough(win, configState.config.clickThrough);
   };
 
-  win.on("will-resize", (event) => {
-    if (!applyingPreset) event.preventDefault();
+  win.on("will-resize", (event, newBounds) => {
+    if (applyingPreset || sameSize(newBounds, lockedSize)) return;
+    event.preventDefault();
   });
 
   win.on("resized", () => {
     if (win.isDestroyed() || applyingPreset || dragging) return;
     const bounds = win.getBounds();
     if (!sameSize(bounds, lockedSize)) {
-      win.setBounds({ x: bounds.x, y: bounds.y, width: lockedSize.width, height: lockedSize.height });
+      const end = beginApply();
+      commitPetWindowSize(win, lockedSize);
+      end();
     }
   });
 
@@ -178,12 +199,16 @@ app.whenReady().then(() => {
     return { ...lockedSize, displayPreset: preset };
   });
 
-  ipcMain.handle("nori:set-ui-chrome", (_event, state: { hudOn?: boolean; menuOpen?: boolean }) => {
-    if (typeof state?.hudOn === "boolean") hudOn = state.hudOn;
-    if (typeof state?.menuOpen === "boolean") menuOpen = state.menuOpen;
-    applyWindowChrome();
-    return { ...lockedSize, hudOn, menuOpen };
-  });
+  ipcMain.handle(
+    "nori:set-ui-chrome",
+    (_event, state: { hudOn?: boolean; menuOpen?: boolean; menuHeight?: number }) => {
+      if (typeof state?.hudOn === "boolean") hudOn = state.hudOn;
+      if (typeof state?.menuOpen === "boolean") menuOpen = state.menuOpen;
+      if (typeof state?.menuHeight === "number" && state.menuHeight > 0) menuHeight = state.menuHeight;
+      applyWindowChrome();
+      return { ...lockedSize, hudOn, menuOpen, menuHeight };
+    },
+  );
 
   ipcMain.handle("nori:click-through", (_event, on: boolean) => {
     configState.config.clickThrough = on;
@@ -214,6 +239,7 @@ app.whenReady().then(() => {
 
   ipcMain.on("nori:drag-end", () => {
     dragging = false;
+    applyWindowChrome();
   });
 
   ipcMain.on("nori:hover-opaque", (_event, opaque: boolean) => {
@@ -228,8 +254,10 @@ app.whenReady().then(() => {
     applyClickThrough(win, !opaque);
   });
 
-  ipcMain.on("nori:menu-open", (_event, open: boolean) => {
+  ipcMain.on("nori:menu-open", (_event, open: boolean, height?: number) => {
     menuOpen = Boolean(open);
+    if (typeof height === "number" && height > 0) menuHeight = height;
+    if (!menuOpen) menuHeight = 0;
     restoreClickThrough();
     applyWindowChrome();
   });

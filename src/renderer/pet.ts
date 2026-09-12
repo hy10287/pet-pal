@@ -21,7 +21,7 @@ import { pacedDurationSec } from "../shared/motion-pace";
 import type { PetActor } from "./actor";
 import { getBootstrap, getBridge } from "./bridge";
 import { bindChatBubble, ensureChatRoot } from "./chat-bubble";
-import { applyPreviewStageCrop, croppedWindowSize, parseDisplayPreset } from "./display-crop";
+import { applyPreviewStageCrop, applyStageCrop, parseDisplayPreset } from "./display-crop";
 import { lerpParams, motionOffsets, paramsForClip, type ExpressionParams } from "./expression";
 import { FallbackActor } from "./fallback-actor";
 import { hudSnapshot, renderHud } from "./hud";
@@ -62,15 +62,9 @@ async function main(): Promise<void> {
     height: boot.config.window.height,
   };
   let displayPreset: DisplayPresetId = parseDisplayPreset(boot.config.displayPreset);
-  
+
   const syncStageCrop = () => {
-    const stage = document.getElementById("stage");
-    if (!stage) return;
-    const size = croppedWindowSize(fullWindow, displayPreset);
-    stage.style.width = `${size.width}px`;
-    stage.style.height = `${size.height}px`;
-    stage.style.overflow = "hidden";
-    // Pixi layout follows stage/client size via resize listener.
+    applyStageCrop(document.getElementById("stage"), fullWindow, displayPreset);
   };
 
   if (preview) {
@@ -243,10 +237,10 @@ async function main(): Promise<void> {
         displayPreset,
         motions: bodyMotionsForMenu(boot.catalog.items),
       }),
-      onOpen: () => {
+      onOpen: (info) => {
         chat.close();
         bridge.setHoverOpaque(true);
-        syncOverlay();
+        bridge.setMenuOpen(true, info?.menuHeight);
       },
       onClose: syncOverlay,
     },
