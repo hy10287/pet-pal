@@ -38,7 +38,53 @@ curl -sS -X POST http://127.0.0.1:3927/intent \
   -d '{"emotion":"happy","intensity":0.7,"motionHint":"smile","say":"hello"}'
 ```
 
-成功：`{"ok":true,"played":{...}}`。`say` 目前只记日志（聊天气泡 UI 未做）。可选字段：`variant`、`source`。可选 WebSocket：`ws://127.0.0.1:3927/intent`，报文同 JSON。
+成功：`{"ok":true,"played":{...}}`。可选字段：`variant`、`source`。可选 WebSocket：`ws://127.0.0.1:3927/intent`，报文同 JSON。对话气泡由下面的 **对话开关** 负责，不改这个控制口。
+
+## 对话（可选 · stub / Grok Bot）
+
+右键菜单 **「对话：开 / 关」**，可选 **「Grok Bot / 本地 stub」**。状态写入 `chat` 并经 `saveConfig` 持久化。所有地址和超时都在配置里，方便以后调。
+
+```json
+"chat": {
+  "enabled": false,
+  "provider": "stub",
+  "grokBotUrl": "http://127.0.0.1:3937/nori-chat",
+  "timeoutMs": 180000
+}
+```
+
+- `enabled`：总开关。关 = 点身体只播点头/歪头（现在的默认）。开 = 点身体弹出对话气泡。
+- `provider`: `stub` 走本地假回复（`interaction/chat-stub.ts`，不联网）；`grokbot` 向 `grokBotUrl` 发 HTTP。Electron 直连该地址；`npm run preview` 经同源 `/api/grok-bot` 转发，避开浏览器 CORS。
+- `timeoutMs`：Grok Bot **轮询宽限**（默认 3 分钟，上限 5 分钟），不是 POST 阻塞时间。POST 会在毫秒级返回 pending 占位。
+- 可选以后再调：`systemPromptHint`、`maxChars`。
+
+### Grok Bot 协议（异步）
+
+对话是 **POST 投递 + GET 取结果**，避免同步 HTTP 空等 90s webhook / Grok Bot。本地桥：
+
+```bash
+npm run bridge          # node scripts/nori-grokbot-bridge.js  → 127.0.0.1:3937
+```
+
+工作目录 `.nori-chat/`（已 gitignore）：`inbox/`、`outbox/`，可选 `webhook.url` + `webhook.auth`（`Authorization` 原样，如 `Bearer …`）。
+
+**POST** `http://127.0.0.1:3937/nori-chat` — 只写 inbox，可选 fire-and-forget 唤醒 webhook，**不轮询 outbox**：
+
+```json
+{ "text": "你好", "sessionId": "nori-…" }
+```
+
+立即 `200`：
+
+```json
+{ "id": "<uuid>", "pending": true, "say": "……", "emotion": "shy", "intensity": 0.35 }
+```
+
+**GET** `/nori-chat/result/<id>` — 有 `.nori-chat/outbox/<id>.json` 则返回其 JSON（`say` / `emotion` / …）并删除该文件；否则 `200 { "id", "pending": true }`。另有 `GET /health`。
+
+Nori：气泡先显示占位「……」+ 害羞；每 500ms 左右轮询 GET，拿到终稿后**更新同一条气泡**并走 `MotionDirector`。宽限内一直没有 outbox：只说一句「好像没等到回复，稍后再试。」，不冻 UI。Agent 把终稿写成 outbox 即可，不要在 POST 里等。
+
+兼容：POST 若直接返回完整 `say`（无 `pending`）仍当作终稿，不再轮询。预览把 GET `/api/grok-bot/result/:id` 转到同一桥。无 TTS。
 
 ## 放置 Cubism Core（不随仓库分发）
 
@@ -100,10 +146,10 @@ Demo 的 sample catalog 即使没有真实 motion 文件，也会用参数混合
 | 左键拖角色 | 移动窗口 |
 | 单击头/脸 | 害羞或开心 |
 | 双击 | 兴奋 / 闪光（`eventOnly` 可入选） |
-| 单击身体 | 点头或歪头回应 |
+| 单击身体 | 对话关：点头/歪头。对话开：弹出气泡 |
 | 悬停 1.2s | 好奇注视 |
 | 右键菜单 · 缩放 | 缩放 0.6–1.8（仅菜单，无滚轮缩放） |
-| 右键 | 待机 / 随机情绪 / 穿透 / HUD / 退出 |
+| 右键 | 待机 / 随机 / 对话开关 / Grok Bot·stub / 穿透 / HUD / 退出 |
 | 鼠标移动 | `ParamAngle*` / `ParamEyeBall*` 阻尼跟随 |
 | `H` | 调试 HUD（当前 intent + face/body id） |
 | 托盘 | 退出等 |
@@ -142,18 +188,23 @@ Electron 主进程
 ├── launch.js              清除 ELECTRON_RUN_AS_NODE 后拉起 Electron
 ├── src/main/index.ts      透明置顶窗 / IPC / 托盘 / agent 控制口
 ├── src/main/agent-control-server.ts   127.0.0.1 HTTP + 可选 WS
-├── src/main/config.ts     modelPath / motionsTagsPath / motionsDir
-└── src/main/preview-server.ts   浏览器预览
+├── src/main/config.ts     modelPath / motionsTagsPath / motionsDir / chat
+├── src/main/preview-server.ts   浏览器预览
+└── scripts/nori-grokbot-bridge.js  127.0.0.1:3937 异步 inbox/outbox
 
 渲染进程
-├── src/renderer/pet.ts           交互循环、缩放、HUD
+├── src/renderer/pet.ts           交互循环、缩放、HUD、对话开关
+├── src/renderer/chat-bubble.ts   气泡输入
 ├── src/renderer/live2d-actor.ts  PIXI v7 + pixi-live2d-display/cubism4
 └── src/renderer/fallback-actor.ts 原创占位角色
 
 情绪 / 交互（可单测）
 ├── emotion/retrieve.ts    retrieve(intent) 计分
 ├── emotion/director.ts    双层播放 + idle + 冷却
-└── interaction/router.ts  本地事件 → EmotionIntent（预留 API classifier stub）
+├── interaction/router.ts  本地事件 → EmotionIntent
+├── interaction/chat-stub.ts     本地假回复（不联网）
+├── interaction/chat-protocol.ts  Grok Bot 请求/响应校验
+└── interaction/grokbot-client.ts  POST 占位 + GET /result/:id 轮询（超时不崩）
 ```
 
 ```mermaid
@@ -188,7 +239,7 @@ flowchart LR
 - 本地 intent router（Demo 不需要云端 AI）
 - Idle director、交叉淡化、冷却防抖、调试 HUD
 - TypeScript 模块边界：`main/` `renderer/` `emotion/retrieve.ts` `interaction/router.ts`
-- 无截屏、无 TTS、无聊天； Cubism Core 与版权模型都不进仓库
+- 无截屏、无 TTS；对话默认关，可选本地 stub 或本机 Grok Bot。Cubism Core 与版权模型都不进仓库
 
 ## 技术栈
 

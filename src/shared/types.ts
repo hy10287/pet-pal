@@ -56,6 +56,24 @@ export interface MotionCatalog {
 
 export type DisplayPresetId = "compact" | "balanced" | "standard" | "full";
 
+export type ChatProvider = "stub" | "grokbot";
+
+/** Tunable body-click chat. Endpoints and timeouts stay in config. */
+export interface ChatConfig {
+  /** Master switch: show bubble / accept body-click chat. */
+  enabled: boolean;
+  /** stub = local fake reply (no network); grokbot = HTTP POST + poll GET. */
+  provider: ChatProvider;
+  /** Default http://127.0.0.1:3937/nori-chat */
+  grokBotUrl: string;
+  /** Poll grace for GET /result/:id (ms). Default 180000. POST itself is short. */
+  timeoutMs: number;
+  /** Optional later knob: hint for the remote hub (not sent in v1 body). */
+  systemPromptHint?: string;
+  /** Optional later knob: max user text length. */
+  maxChars?: number;
+}
+
 export interface AppConfig {
   modelPath: string;
   cubismCorePath: string;
@@ -76,6 +94,7 @@ export interface AppConfig {
    * Override with NORI_CONTROL_PORT. v1 has no auth.
    */
   agentControlPort: number;
+  chat: ChatConfig;
 }
 
 export interface BootstrapPayload {
@@ -114,4 +133,6 @@ export interface DirectorDebugState {
   clickThrough: boolean;
   actor: "live2d" | "fallback";
   motionSource?: "file" | "params";
+  chatEnabled?: boolean;
+  chatProvider?: ChatProvider;
 }

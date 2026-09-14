@@ -1,15 +1,20 @@
 import {
-  appendHistory,
+  beginChatTurn,
   canSendChat,
   onUserChat,
+  replaceLastPetText,
   type ChatReply,
   type ChatTurn,
 } from "../interaction/chat-stub";
+import { chatEmptyHint } from "../shared/chat-config";
+import type { ChatProvider } from "../shared/types";
 
 export interface ChatBubbleHooks {
   onOpen?: () => void;
   onClose?: () => void;
   onReply?: (text: string, reply: ChatReply) => void;
+  getProvider?: () => ChatProvider;
+  getMaxChars?: () => number | undefined;
 }
 
 export interface ChatBubbleController {
@@ -63,13 +68,39 @@ export function bindChatBubble(root: HTMLElement, hooks: ChatBubbleHooks = {}): 
     sending = true;
     const trimmed = text.trim();
     if (input) input.value = "";
-    try {
-      const reply = await onUserChat(trimmed);
-      history = appendHistory(history, trimmed, reply);
+    const grok = hooks.getProvider?.() === "grokbot";
+    if (grok) {
+      history = beginChatTurn(history, trimmed);
       render();
-      hooks.onReply?.(trimmed, reply);
+      hooks.onReply?.(trimmed, { say: "……", emotion: "shy", intensity: 0.35, pending: true });
+    } else {
+      history = [...history, { role: "user", text: trimmed }];
+      render();
+    }
+    try {
+      let pendingApplied = grok;
+      const reply = await onUserChat(trimmed, (partial) => {
+        history = replaceLastPetText(history, partial);
+        render();
+        if (partial.error) return;
+        if (partial.pending) {
+          if (!pendingApplied) {
+            pendingApplied = true;
+            hooks.onReply?.(trimmed, partial);
+          }
+          return;
+        }
+        hooks.onReply?.(trimmed, partial);
+      });
+      history = replaceLastPetText(history, reply);
+      render();
+      if (!reply.error) hooks.onReply?.(trimmed, reply);
       const next = root.querySelector("input");
       next?.focus();
+    } catch {
+      const reply: ChatReply = { say: "对话出错了，稍后再试。", error: true };
+      history = replaceLastPetText(history, reply);
+      render();
     } finally {
       sending = false;
     }
@@ -85,7 +116,7 @@ export function bindChatBubble(root: HTMLElement, hooks: ChatBubbleHooks = {}): 
     if (!recent.length) {
       const empty = document.createElement("p");
       empty.className = "chat-empty";
-      empty.textContent = "本地输入 · 还不会连 Grok";
+      empty.textContent = chatEmptyHint(hooks.getProvider?.() ?? "stub");
       log.append(empty);
     } else {
       for (const turn of recent) {
@@ -105,7 +136,8 @@ export function bindChatBubble(root: HTMLElement, hooks: ChatBubbleHooks = {}): 
 
     const input = document.createElement("input");
     input.type = "text";
-    input.maxLength = 160;
+    const maxChars = hooks.getMaxChars?.();
+    input.maxLength = maxChars != null && maxChars > 0 ? maxChars : 160;
     input.autocomplete = "off";
     input.placeholder = "跟 Nori 说点什么…";
     input.setAttribute("aria-label", "对话输入");

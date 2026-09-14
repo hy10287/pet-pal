@@ -1,6 +1,8 @@
 import { Application, Graphics } from "pixi.js";
 import { MotionDirector } from "../emotion/director";
-import { intentFromChatReply } from "../interaction/chat-stub";
+import { intentFromChatReply, setChatHandler } from "../interaction/chat-stub";
+import { createGrokBotHandler } from "../interaction/grokbot-client";
+import { parseChatConfig } from "../shared/chat-config";
 import {
   PAT_RELEASE_IDLE_MS,
   patFaceBoost,
@@ -111,6 +113,23 @@ async function main(): Promise<void> {
   let scale = boot.config.scale;
   let clickThrough = boot.config.clickThrough;
   let hudOn = boot.config.debugHud || preview;
+  let chatConfig = parseChatConfig(boot.config.chat);
+  const chatSessionId = `nori-${Date.now().toString(36)}`;
+  const applyChatHandler = () => {
+    if (chatConfig.provider === "grokbot") {
+      const grokBotUrl = preview ? "/api/grok-bot" : chatConfig.grokBotUrl;
+      setChatHandler(createGrokBotHandler({ ...chatConfig, grokBotUrl }, chatSessionId));
+    } else {
+      setChatHandler(null);
+    }
+  };
+  applyChatHandler();
+  const persistChat = (next = chatConfig) => {
+    chatConfig = parseChatConfig(next);
+    applyChatHandler();
+    void bridge.saveConfig({ chat: chatConfig });
+    syncHud(true);
+  };
   void bridge.setUiChrome?.({ hudOn });
   let currentParams: ExpressionParams = paramsForClip(null, null);
   let targetParams: ExpressionParams = currentParams;
@@ -132,7 +151,11 @@ async function main(): Promise<void> {
   let lastHud = "";
   let saveScaleTimer: number | undefined;
 
-  const hudState = () => director.debug(scale, clickThrough, actor.kind, actor.lastMotionSource());
+  const hudState = () => ({
+    ...director.debug(scale, clickThrough, actor.kind, actor.lastMotionSource()),
+    chatEnabled: chatConfig.enabled,
+    chatProvider: chatConfig.provider,
+  });
   const syncHud = (force = false) => {
     const next = hudSnapshot(hudState());
     if (!force && next === lastHud && !hudEl.hidden === hudOn) return;
@@ -199,8 +222,11 @@ async function main(): Promise<void> {
   const chat = bindChatBubble(chatEl, {
     onOpen: syncOverlay,
     onClose: syncOverlay,
+    getProvider: () => chatConfig.provider,
+    getMaxChars: () => chatConfig.maxChars,
     onReply: (_text, reply) => {
-      beginPlay(intentFromChatReply(reply), "chat");
+      if (reply.error) return;
+      beginPlay(intentFromChatReply(reply, chatConfig.provider), "chat");
     },
   });
 
@@ -210,8 +236,15 @@ async function main(): Promise<void> {
     (command) => {
       if (command.type === "idle") play("menu-idle");
       if (command.type === "random") play("random");
-      // chat UI disabled for now — keep stub for future Grok Bot
-      // if (command.type === "chat") chat.open();
+      if (command.type === "toggle-chat") {
+        persistChat({ ...chatConfig, enabled: !chatConfig.enabled });
+      }
+      if (command.type === "toggle-chat-provider") {
+        persistChat({
+          ...chatConfig,
+          provider: chatConfig.provider === "grokbot" ? "stub" : "grokbot",
+        });
+      }
       if (command.type === "motion") playBodyId(command.id);
       if (command.type === "scale") applyScale(command.value, true);
       if (command.type === "display-preset") applyPreset(command.id);
@@ -235,6 +268,8 @@ async function main(): Promise<void> {
         hudOn,
         clickThrough,
         displayPreset,
+        chatEnabled: chatConfig.enabled,
+        chatProvider: chatConfig.provider,
         motions: bodyMotionsForMenu(boot.catalog.items),
       }),
       onOpen: (info) => {
@@ -359,7 +394,11 @@ async function main(): Promise<void> {
     }
     lastClickAt = now;
     if (!isHeadZone(zone)) {
-      play("body-click"); // chat disabled
+      if (chatConfig.enabled) {
+        chat.open();
+        return;
+      }
+      play("body-click");
       return;
     }
     window.setTimeout(() => {

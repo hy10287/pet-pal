@@ -29,6 +29,68 @@ function resolveCubismFile(root: string, configuredPath: string): string {
   return resolveRepoPath(root, configuredPath);
 }
 
+const GROK_POST_PROXY_TIMEOUT_MS = 8_000;
+const GROK_GET_PROXY_TIMEOUT_MS = 5_000;
+
+function writeUpstream(
+  res: import("node:http").ServerResponse,
+  upstream: Response,
+  text: string,
+): void {
+  res.writeHead(upstream.status, {
+    "content-type": upstream.headers.get("content-type") || "application/json; charset=utf-8",
+  });
+  res.end(text);
+}
+
+async function proxyGrokBot(req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse): Promise<void> {
+  const method = (req.method ?? "GET").toUpperCase();
+  const pathOnly = (req.url ?? "/").split("?")[0] ?? "";
+  const { config } = loadAppConfig(ROOT);
+  const targetBase = config.chat.grokBotUrl.replace(/\/+$/, "");
+
+  if (method === "POST" && (pathOnly === "/api/grok-bot" || pathOnly === "/api/grok-bot/")) {
+    const chunks: Buffer[] = [];
+    try {
+      for await (const chunk of req) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      const upstream = await fetch(targetBase, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: Buffer.concat(chunks),
+        signal: AbortSignal.timeout(GROK_POST_PROXY_TIMEOUT_MS),
+      });
+      writeUpstream(res, upstream, await upstream.text());
+    } catch {
+      res.writeHead(502, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: "grok bot unreachable" }));
+    }
+    return;
+  }
+
+  const resultMatch = pathOnly.match(/^\/api\/grok-bot\/result\/([^/]+)$/);
+  if (method === "GET" && resultMatch) {
+    try {
+      const upstream = await fetch(`${targetBase}/result/${resultMatch[1]}`, {
+        method: "GET",
+        signal: AbortSignal.timeout(GROK_GET_PROXY_TIMEOUT_MS),
+      });
+      writeUpstream(res, upstream, await upstream.text());
+    } catch {
+      res.writeHead(502, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: "grok bot unreachable" }));
+    }
+    return;
+  }
+
+  res.writeHead(405, {
+    allow: "POST, GET",
+    "content-type": "application/json; charset=utf-8",
+  });
+  res.end(JSON.stringify({ error: "use POST /api/grok-bot or GET /api/grok-bot/result/:id" }));
+}
+
 function bootstrap(): BootstrapPayload {
   const { config } = loadAppConfig(ROOT);
   const cubism = resolveCubismFile(ROOT, config.cubismCorePath);
@@ -60,6 +122,12 @@ const server = createServer((req, res) => {
   if (url.startsWith("/api/bootstrap")) {
     res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
     res.end(JSON.stringify(bootstrap()));
+    return;
+  }
+
+  // Browser preview is cross-origin to grokBotUrl; Electron posts directly.
+  if (url.startsWith("/api/grok-bot")) {
+    void proxyGrokBot(req, res);
     return;
   }
 

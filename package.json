@@ -10,6 +10,7 @@
     "build": "node scripts/build.mjs",
     "start": "npm run build && node launch.js",
     "preview": "npm run build && node dist/main/preview-server.js",
+    "bridge": "node scripts/nori-grokbot-bridge.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },
