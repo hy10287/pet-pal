@@ -62,11 +62,12 @@ body.preview {
 }
 
 #notice {
-  position: absolute;
-  left: 12px;
-  right: 28px;
-  bottom: 12px;
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
   z-index: 30;
+  margin: 8px 8px 0;
   padding: 8px 10px;
   border-radius: 10px;
   background: rgba(12, 16, 24, 0.72);

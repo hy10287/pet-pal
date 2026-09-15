@@ -215,7 +215,8 @@ async function main(): Promise<void> {
   });
 
   const syncChrome = () => {
-    const rail = settingsOpen || hudOn;
+    const noticeOn = Boolean(noticeEl && !noticeEl.hidden);
+    const rail = settingsOpen || hudOn || noticeOn;
     if (sidebarEl) sidebarEl.hidden = !rail;
     dockTab?.setAttribute("aria-expanded", rail ? "true" : "false");
     dockTab?.setAttribute("title", rail ? "收起设置" : "设置");
