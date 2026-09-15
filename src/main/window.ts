@@ -72,9 +72,13 @@ export function createPetWindow(options: PetWindowOptions): BrowserWindow {
 export function commitPetWindowSize(
   win: BrowserWindow,
   size: { width: number; height: number },
+  position?: { x: number; y: number },
 ): void {
   if (win.isDestroyed()) return;
-  const next = applyLockedSize(win.getBounds(), size);
+  const current = win.getBounds();
+  const next = position
+    ? { x: Math.round(position.x), y: Math.round(position.y), width: size.width, height: size.height }
+    : applyLockedSize(current, size);
   const wasResizable = win.isResizable();
   try {
     win.setMinimumSize(1, MIN_WINDOW_HEIGHT);

@@ -109,7 +109,7 @@ export function applyPreviewStageCrop(
 ): { width: number; height: number } {
   const size = applyStageCrop(document.getElementById("stage"), full, preset);
   document.body.style.height = `${size.height}px`;
-  document.body.style.overflow = "hidden";
+  document.body.style.width = `${size.width}px`;
   window.dispatchEvent(new Event("resize"));
   return size;
 }

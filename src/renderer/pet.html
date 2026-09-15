@@ -8,10 +8,15 @@
     <link rel="stylesheet" href="./pet.css" />
   </head>
   <body>
-    <div id="stage"></div>
-    <div id="notice" hidden></div>
-    <div id="hud" hidden></div>
-    <div id="menu" hidden></div>
+    <div id="stage-wrap">
+      <div id="stage"></div>
+      <button type="button" id="dock-tab" aria-label="设置" title="设置" aria-expanded="false">设置</button>
+      <div id="notice" hidden></div>
+    </div>
+    <aside id="sidebar" hidden>
+      <div id="hud" hidden></div>
+      <div id="menu" hidden></div>
+    </aside>
     <div id="chat" hidden></div>
     <script src="./pet.js"></script>
   </body>

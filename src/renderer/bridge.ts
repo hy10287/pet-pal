@@ -1,5 +1,6 @@
 import type { AppConfig, BootstrapPayload, DisplayPresetId } from "../shared/types";
 import { applyPreviewStageCrop, parseDisplayPreset } from "./display-crop";
+import { displayWindowSize } from "../shared/display-preset";
 import type { NoriBridge } from "../main/preload";
 
 declare global {
@@ -23,7 +24,17 @@ export function createWebBridge(): NoriBridge {
       const boot = await getBootstrap();
       return { ...boot.config, ...patch };
     },
-    setUiChrome: async () => ({ width: 420, height: 560, hudOn: false, menuOpen: false }),
+    setUiChrome: async (state) => {
+      const boot = await getBootstrap();
+      const rail = Boolean(state.hudOn || state.menuOpen);
+      const size = displayWindowSize(boot.config.window, parseDisplayPreset(boot.config.displayPreset), {
+        hudOn: Boolean(state.hudOn),
+        menuOpen: rail,
+      });
+      document.body.style.width = `${size.width}px`;
+      document.body.style.height = `${size.height}px`;
+      return { ...size, hudOn: Boolean(state.hudOn), menuOpen: rail, menuHeight: state.menuHeight };
+    },
     setDisplayPreset: async (preset: DisplayPresetId) => {
       const boot = await getBootstrap();
       const id = parseDisplayPreset(preset);

@@ -1,5 +1,5 @@
 import type { CatalogItem, DisplayPresetId } from "../shared/types";
-import { DISPLAY_PRESETS } from "./display-crop";
+import { DISPLAY_PRESETS, USER_SCALE_MAX, USER_SCALE_MIN } from "../shared/display-preset";
 
 export interface MenuHooks {
   onOpen?: (info?: { menuHeight: number; clientX: number; clientY: number }) => void;
@@ -12,6 +12,7 @@ export type MenuCommand =
   | { type: "random" }
   | { type: "toggle-hud" }
   | { type: "toggle-click-through" }
+  | { type: "toggle-edge-snap" }
   | { type: "quit" }
   | { type: "scale"; value: number }
   | { type: "display-preset"; id: DisplayPresetId }
@@ -21,12 +22,13 @@ export interface MenuState {
   scale: number;
   hudOn: boolean;
   clickThrough: boolean;
+  edgeSnap: boolean;
   displayPreset: DisplayPresetId;
   motions: { id: string; label: string }[];
 }
 
-export const SCALE_MIN = 0.6;
-export const SCALE_MAX = 1.8;
+export const SCALE_MIN = USER_SCALE_MIN;
+export const SCALE_MAX = USER_SCALE_MAX;
 
 const EMOTION_ZH: Record<string, string> = {
   neutral: "待机",
@@ -84,9 +86,8 @@ export function bindContextMenu(
   root: HTMLElement,
   menu: HTMLElement,
   onCommand: (command: MenuCommand) => void,
-  hooks: MenuHooks & { getState: () => MenuState } ,
-): void {
-  let openedAt = 0;
+  hooks: MenuHooks & { getState: () => MenuState; dockTab?: HTMLElement | null },
+): { close: () => void; isOpen: () => boolean } {
   let open = false;
 
   const hide = () => {
@@ -96,44 +97,36 @@ export function bindContextMenu(
     hooks.onClose?.();
   };
 
-  const placeMenu = (clientX: number, clientY: number) => {
-    const rect = menu.getBoundingClientRect();
-    const x = Math.min(Math.max(8, clientX), Math.max(8, window.innerWidth - rect.width - 8));
-    const y = Math.min(Math.max(8, clientY), Math.max(8, window.innerHeight - rect.height - 8));
-    menu.style.left = `${x}px`;
-    menu.style.top = `${y}px`;
-    return rect;
-  };
-
-  const show = (clientX: number, clientY: number) => {
+  const show = (clientX = 0, clientY = 0) => {
     open = true;
-    openedAt = performance.now();
     renderMenu(menu, hooks.getState(), onCommand, hide);
     menu.hidden = false;
-    requestAnimationFrame(() => {
-      const rect = placeMenu(clientX, clientY);
-      hooks.onOpen?.({ menuHeight: Math.ceil(rect.height), clientX, clientY });
-      // After main expands the window for a tall menu, re-clamp into the new viewport.
-      requestAnimationFrame(() => placeMenu(clientX, clientY));
-    });
+    hooks.onOpen?.({ menuHeight: 0, clientX, clientY });
+  };
+
+  const toggle = (clientX: number, clientY: number) => {
+    if (open) hide();
+    else show(clientX, clientY);
   };
 
   root.addEventListener("contextmenu", (event) => {
     event.preventDefault();
     event.stopPropagation();
-    show(event.clientX, event.clientY);
+    if (menu.contains(event.target as Node)) return;
+    toggle(event.clientX, event.clientY);
   });
 
-  window.addEventListener(
-    "pointerdown",
-    (event) => {
-      if (!open) return;
-      const inMenu = menu.contains(event.target as Node);
-      if (!shouldDismissMenu(openedAt, performance.now(), inMenu)) return;
-      hide();
-    },
-    true,
-  );
+  hooks.dockTab?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggle(0, 0);
+  });
+
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && open) hide();
+  });
+
+  return { close: hide, isOpen: () => open };
 }
 
 export function renderMenu(
@@ -144,6 +137,23 @@ export function renderMenu(
 ): void {
   menu.replaceChildren();
   menu.classList.add("nori-menu");
+
+  const headingRow = document.createElement("div");
+  headingRow.className = "menu-head";
+  const title = document.createElement("h2");
+  title.textContent = "设置";
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "menu-close";
+  close.setAttribute("aria-label", "关闭设置");
+  close.textContent = "×";
+  close.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    hide();
+  });
+  headingRow.append(title, close);
+  menu.append(headingRow);
 
   menu.append(
     section("交互", [
@@ -226,10 +236,17 @@ export function renderMenu(
   }
   menu.append(section("身体动作", [motionWrap]));
 
+  const snapBtn = actionButton(state.edgeSnap ? "贴边吸附：开" : "贴边吸附：关", () => {
+    onCommand({ type: "toggle-edge-snap" });
+    const next = !state.edgeSnap;
+    state.edgeSnap = next;
+    snapBtn.textContent = next ? "贴边吸附：开" : "贴边吸附：关";
+  });
+  snapBtn.dataset.edgeSnap = "1";
   menu.append(
     section("系统", [
+      snapBtn,
       actionButton(state.hudOn ? "隐藏调试 HUD" : "显示调试 HUD", () => {
-        hide();
         onCommand({ type: "toggle-hud" });
       }),
       actionButton(state.clickThrough ? "关闭鼠标穿透" : "打开鼠标穿透", () => {

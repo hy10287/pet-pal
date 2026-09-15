@@ -38,3 +38,30 @@ export function placeAt(x: number, y: number, lock: { width: number; height: num
     height: lock.height,
   };
 }
+
+/**
+ * Keep the current top-left when chrome width changes, then clamp into the work area
+ * so a right-side settings rail cannot run off-screen (and does not change crop height).
+ */
+export function placeChromeBounds(
+  current: WindowRect,
+  size: { width: number; height: number },
+  workArea?: { x: number; y: number; width: number; height: number },
+): WindowRect {
+  let x = current.x;
+  let y = current.y;
+  if (workArea) {
+    const maxX = workArea.x + workArea.width - size.width;
+    const maxY = workArea.y + workArea.height - size.height;
+    if (x + size.width > workArea.x + workArea.width) x = Math.max(workArea.x, maxX);
+    if (y + size.height > workArea.y + workArea.height) y = Math.max(workArea.y, maxY);
+    if (x < workArea.x) x = workArea.x;
+    if (y < workArea.y) y = workArea.y;
+  }
+  return {
+    x: Math.round(x),
+    y: Math.round(y),
+    width: size.width,
+    height: size.height,
+  };
+}
