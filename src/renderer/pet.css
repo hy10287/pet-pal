@@ -17,7 +17,6 @@ body.preview {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  /* Inline height from JS locks crop when window expands for HUD/menu. */
 }
 
 #stage canvas {
@@ -26,9 +25,10 @@ body.preview {
 
 #notice {
   position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
+  left: 8px;
+  bottom: 8px;
+  z-index: 30;
+  max-width: min(200px, 46vw);
   padding: 8px 10px;
   border-radius: 10px;
   background: rgba(12, 16, 24, 0.72);
@@ -40,11 +40,11 @@ body.preview {
 
 #hud {
   position: fixed;
-  top: 8px;
   left: 8px;
+  bottom: 8px;
   z-index: 50;
-  width: min(268px, calc(100vw - 16px));
-  max-height: calc(100vh - 16px);
+  width: min(240px, calc(100vw - 16px));
+  max-height: min(42vh, 220px);
   overflow: auto;
   padding: 8px 10px 6px;
   border-radius: 12px;
@@ -56,7 +56,6 @@ body.preview {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
 }
 
-/* Short window-crop: keep HUD readable via scroll; help collapsed by default in JS */
 #hud .hud-help:not([open]) summary {
   margin-bottom: 0;
 }
@@ -112,6 +111,30 @@ body.preview {
   color: #eef4ff;
 }
 
+#menu .menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 4px 8px;
+  cursor: grab;
+}
+
+#menu .menu-head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #7de3cf;
+}
+
+#menu .menu-close {
+  width: auto;
+  padding: 2px 8px;
+  font-size: 16px;
+  line-height: 1;
+  color: #8ea0b8;
+  cursor: pointer;
+}
+
 #menu .menu-section {
   margin-bottom: 8px;
 }
@@ -142,7 +165,8 @@ body.preview {
   font-size: 13px;
 }
 
-#menu button:hover {
+#menu button:hover,
+#menu .menu-close:hover {
   background: #2a364c;
 }
 
@@ -165,7 +189,7 @@ body.preview {
 }
 
 #menu .menu-motions {
-  max-height: 196px;
+  max-height: 140px;
   overflow: auto;
   padding-right: 2px;
 }

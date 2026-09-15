@@ -1,10 +1,17 @@
-/** Fit an unscaled model into the view. Never pass already-scaled bounds. */
+import { clampUserScale, USER_SCALE_MAX, USER_SCALE_MIN } from "../shared/display-preset";
+
+export { clampUserScale, USER_SCALE_MAX, USER_SCALE_MIN };
+export const FIT_FILL = 0.86;
+const MIN_NATURAL = 8;
+const MIN_VIEW = 32;
+
+/** Fit an unscaled model into the full-body baseline. Never pass cropped height or already-scaled bounds. */
 export function fitScale(
   naturalWidth: number,
   naturalHeight: number,
   viewWidth: number,
   viewHeight: number,
-  fill = 0.86,
+  fill = FIT_FILL,
 ): number {
   if (naturalWidth <= 0 || naturalHeight <= 0 || viewWidth <= 0 || viewHeight <= 0) {
     return 1;
@@ -12,9 +19,8 @@ export function fitScale(
   return Math.min(viewWidth / naturalWidth, viewHeight / naturalHeight) * fill;
 }
 
-
 /**
- * First successful fit is sticky. Later resize/move must not change visual size —
+ * First successful fit is sticky. Later resize/move/preset crop must not change visual size —
  * user scale is the only size control.
  */
 export function lockFitted(
@@ -25,8 +31,19 @@ export function lockFitted(
   viewHeight: number,
 ): number {
   if (current != null && current > 0) return current;
-  if (viewWidth < 32 || viewHeight < 32 || naturalWidth <= 1 || naturalHeight <= 1) {
+  if (
+    viewWidth < MIN_VIEW ||
+    viewHeight < MIN_VIEW ||
+    naturalWidth < MIN_NATURAL ||
+    naturalHeight < MIN_NATURAL
+  ) {
     return current ?? 0;
   }
   return fitScale(naturalWidth, naturalHeight, viewWidth, viewHeight);
+}
+
+/** Single visual-size model: sticky full-body contain-fit × user slider. */
+export function visualScale(fitted: number, userScale: number): number {
+  const base = fitted > 0 ? fitted : FIT_FILL;
+  return base * clampUserScale(userScale);
 }

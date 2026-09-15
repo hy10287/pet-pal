@@ -97,15 +97,18 @@ Demo 的 sample catalog 即使没有真实 motion 文件，也会用参数混合
 
 | 操作 | 反应 |
 | --- | --- |
-| 左键拖角色 | 移动窗口 |
+| 左键拖角色 | 移动窗口（超过约 10px 才算拖动，避免误触动作） |
 | 单击头/脸 | 害羞或开心 |
 | 双击 | 兴奋 / 闪光（`eventOnly` 可入选） |
 | 单击身体 | 点头或歪头回应 |
 | 悬停 1.2s | 好奇注视 |
-| 右键菜单 · 缩放 | 缩放 0.6–1.8（仅菜单，无滚轮缩放） |
-| 右键 | 待机 / 随机情绪 / 穿透 / HUD / 退出 |
+| 右键 | 打开设置弹层（贴在角色旁，可拖标题栏；点空白 / Esc / 再右键关闭） |
+| 设置 · 大小 | 缩放 0.6–1.8（仅此滑杆，无滚轮缩放） |
+| 设置 · 显示范围 | 窗口裁切：头肩 / 上半身 / 到腰 / 全身 |
+| 设置 · 贴边吸附 | 默认关；开时拖到距屏幕工作区边缘 ≤8px 松手对齐 |
+| 设置 · 系统 | 待机 / 随机情绪 / 穿透 / HUD / 退出 |
 | 鼠标移动 | `ParamAngle*` / `ParamEyeBall*` 阻尼跟随 |
-| `H` | 调试 HUD（当前 intent + face/body id） |
+| `H` | 调试 HUD（当前 intent + face/body id，显示在侧栏） |
 | 托盘 | 退出等 |
 
 鼠标穿透打开后，窗口不挡操作，只能用托盘关穿透。关闭穿透时，空白像素会自动穿透，只有角色本体接收点击。
@@ -146,7 +149,7 @@ Electron 主进程
 └── src/main/preview-server.ts   浏览器预览
 
 渲染进程
-├── src/renderer/pet.ts           交互循环、缩放、HUD
+├── src/renderer/pet.ts           交互循环、缩放、右键设置
 ├── src/renderer/live2d-actor.ts  PIXI v7 + pixi-live2d-display/cubism4
 └── src/renderer/fallback-actor.ts 原创占位角色
 

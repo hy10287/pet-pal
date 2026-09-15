@@ -21,15 +21,22 @@ export const MIN_WINDOW_HEIGHT = 140;
 /** Canonical full-body baseline. Presets only shorten height from this. */
 export const DEFAULT_FULL_WINDOW = { width: 420, height: 560 } as const;
 
-/** Extra pixels so a measured menu is not flush against the window edge. */
-export const MENU_CHROME_PAD = 16;
+/** User size slider. The only control that changes character visual size. */
+export const USER_SCALE_MIN = 0.6;
+export const USER_SCALE_MAX = 1.8;
 
-/** Used when the menu is open but the renderer has not reported a height yet. */
-export const DEFAULT_MENU_CHROME = 400;
+export function clampUserScale(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.max(USER_SCALE_MIN, Math.min(USER_SCALE_MAX, value));
+}
+
+/** Temporary width added while the right-click settings popup is open. */
+export const SETTINGS_POPUP_WIDTH = 240;
 
 export interface WindowChromeState {
   hudOn?: boolean;
   menuOpen?: boolean;
+  /** Ignored for sizing (popup uses a fixed-width strip). Kept for older callers. */
   menuHeight?: number;
 }
 
@@ -90,8 +97,8 @@ export function resolveFullWindow(
 
 /**
  * Electron outer size for a preset.
- * HUD/menu may grow the window for UI, but never jump to the full baseline just because chrome is open.
- * When chrome is closed, height is exactly the crop.
+ * Character crop (height) is stable. The right-click settings popup may add a
+ * temporary strip so the panel sits beside the face; HUD does not grow the window.
  */
 export function displayWindowSize(
   full: { width: number; height: number },
@@ -99,13 +106,8 @@ export function displayWindowSize(
   chrome: WindowChromeState = {},
 ): { width: number; height: number } {
   const crop = croppedWindowSize(full, preset);
-  if (!chrome.menuOpen) return crop;
-
-  const measured = Number(chrome.menuHeight);
-  const needed =
-    Number.isFinite(measured) && measured > 0 ? measured + MENU_CHROME_PAD : DEFAULT_MENU_CHROME;
   return {
-    width: crop.width,
-    height: Math.max(crop.height, Math.min(full.height, Math.round(needed))),
+    width: crop.width + (chrome.menuOpen ? SETTINGS_POPUP_WIDTH : 0),
+    height: crop.height,
   };
 }

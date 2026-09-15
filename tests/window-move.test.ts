@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyLockedSize, movedBounds, placeAt, sameSize } from "../src/main/window-move";
+import { applyLockedSize, movedBounds, placeAt, placeChromeBounds, sameSize } from "../src/main/window-move";
 
 const lock = { width: 420, height: 246 };
 
@@ -31,5 +31,26 @@ describe("sameSize", () => {
     expect(sameSize({ width: 420, height: 246 }, lock)).toBe(true);
     expect(sameSize({ width: 421, height: 247 }, lock)).toBe(true);
     expect(sameSize({ width: 420, height: 179 }, lock)).toBe(false);
+  });
+});
+
+describe("placeChromeBounds", () => {
+  const work = { x: 0, y: 0, width: 1920, height: 1040 };
+
+  it("keeps top-left when there is room for a temporary popup strip", () => {
+    expect(
+      placeChromeBounds({ x: 100, y: 80, width: 420, height: 246 }, { width: 660, height: 246 }, work),
+    ).toEqual({ x: 100, y: 80, width: 660, height: 246 });
+  });
+
+  it("shifts left when the popup strip would run off the work area, without changing crop height", () => {
+    const next = placeChromeBounds(
+      { x: 1700, y: 20, width: 420, height: 246 },
+      { width: 660, height: 246 },
+      work,
+    );
+    expect(next.height).toBe(246);
+    expect(next.width).toBe(660);
+    expect(next.x + next.width).toBe(work.width);
   });
 });

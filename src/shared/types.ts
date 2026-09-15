@@ -66,6 +66,11 @@ export interface AppConfig {
   debugHud: boolean;
   /** Window-crop preset. Default: balanced / 上半身. Does not change model scale. */
   displayPreset: DisplayPresetId;
+  /**
+   * Snap the window to the screen work-area edge on drag-end when within 8px.
+   * Default off; stored so the feature can be toggled and rolled back.
+   */
+  edgeSnap: boolean;
   /** Full-body baseline size. Presets only shorten height; this stays the fit reference. */
   window: {
     width: number;

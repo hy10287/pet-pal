@@ -3,8 +3,9 @@ import { isHeadZone } from "./hit-zones";
 
 export type PointerGesture = "none" | "head-pat" | "window-drag";
 
-export const DRAG_THRESHOLD = 12;
+export const DRAG_THRESHOLD = 10;
 export const PAT_THRESHOLD = 10;
+export const DRAG_OVERRIDE = 36;
 export const PAT_RELEASE_IDLE_MS = 420;
 
 export interface GestureInput {
@@ -18,36 +19,38 @@ export interface GestureInput {
 }
 
 /**
- * Decide whether a pointer stroke is a head-pat or a window move.
- * Once decided, the gesture sticks so the two never fight.
+ * Decide whether a pointer stroke is a click, a head-pat, or a window move.
  *
+ * - Movement below the drag threshold stays "none" so pointerup can fire a click.
  * - Middle button → window drag
- * - Left + head + horizontal-dominant → head-pat
- * - Left + body, or left + head + vertical-dominant → window drag
+ * - Far travel always becomes window-drag, even if a head-pat had started
+ *   (so the window cannot lock to a pat gesture).
+ * - Short horizontal stroke on the head → head-pat
+ * - Any other movement on the character → window drag
  */
 export function resolvePointerGesture(input: GestureInput): PointerGesture {
-  if (input.decided !== "none") return input.decided;
-  if (input.downZone === "empty") return "none";
+  if (input.downZone === "empty") return input.decided === "window-drag" ? "window-drag" : "none";
 
   const dragThreshold = input.dragThreshold ?? DRAG_THRESHOLD;
   const patThreshold = input.patThreshold ?? PAT_THRESHOLD;
   const dx = input.dx;
   const dy = input.dy;
   const moved = Math.hypot(dx, dy);
-  if (moved < dragThreshold) return "none";
 
-  if (input.button === 1) return "window-drag";
-  if (input.button !== 0) return "none";
+  if (input.button === 1 && moved >= dragThreshold) return "window-drag";
+  if (input.button !== 0 && input.button !== 1) return input.decided;
 
-  if (isHeadZone(input.downZone) && Math.abs(dx) >= patThreshold && Math.abs(dx) >= Math.abs(dy)) {
+  if (moved >= DRAG_OVERRIDE) return "window-drag";
+  if (input.decided === "window-drag") return "window-drag";
+  if (moved < dragThreshold) return input.decided === "none" ? "none" : input.decided;
+
+  if (input.decided !== "none") return input.decided;
+
+  if (isHeadZone(input.downZone) && Math.abs(dx) >= patThreshold && Math.abs(dx) >= Math.abs(dy) * 1.2) {
     return "head-pat";
   }
 
-  if (!isHeadZone(input.downZone) || Math.abs(dy) > Math.abs(dx)) {
-    return "window-drag";
-  }
-
-  return "none";
+  return "window-drag";
 }
 
 export function patStrokeAmount(dx: number): number {
