@@ -37,13 +37,13 @@ describe("sameSize", () => {
 describe("placeChromeBounds", () => {
   const work = { x: 0, y: 0, width: 1920, height: 1040 };
 
-  it("keeps top-left when there is room for a right-side rail", () => {
+  it("keeps top-left when there is room for a temporary popup strip", () => {
     expect(
       placeChromeBounds({ x: 100, y: 80, width: 420, height: 246 }, { width: 660, height: 246 }, work),
     ).toEqual({ x: 100, y: 80, width: 660, height: 246 });
   });
 
-  it("shifts left when the rail would run off the work area, without changing crop height", () => {
+  it("shifts left when the popup strip would run off the work area, without changing crop height", () => {
     const next = placeChromeBounds(
       { x: 1700, y: 20, width: 420, height: 246 },
       { width: 660, height: 246 },

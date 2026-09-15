@@ -1,5 +1,5 @@
 import type { DisplayPresetId } from "./types";
-import { SETTINGS_SIDEBAR_WIDTH, croppedWindowSize } from "./display-preset";
+import { SETTINGS_POPUP_WIDTH, croppedWindowSize } from "./display-preset";
 
 export interface Rect {
   x: number;
@@ -7,9 +7,6 @@ export interface Rect {
   width: number;
   height: number;
 }
-
-export const DOCK_TAB_WIDTH = 22;
-export const DOCK_TAB_HEIGHT = 56;
 
 /** Upper-center of the stage: the pet's face / head, which overlays must not cover. */
 export function faceSafeRect(stage: { width: number; height: number }): Rect {
@@ -23,17 +20,6 @@ export function faceSafeRect(stage: { width: number; height: number }): Rect {
   };
 }
 
-/** Thin settings tab on the stage's right edge, in the empty margin beside the face. */
-export function dockTabRect(stage: { width: number; height: number }): Rect {
-  const height = Math.min(DOCK_TAB_HEIGHT, Math.max(36, Math.round(stage.height * 0.28)));
-  return {
-    x: Math.max(0, stage.width - DOCK_TAB_WIDTH),
-    y: Math.round(stage.height * 0.4),
-    width: DOCK_TAB_WIDTH,
-    height,
-  };
-}
-
 export function rectsOverlap(a: Rect, b: Rect, pad = 0): boolean {
   return (
     a.x < b.x + b.width + pad &&
@@ -43,41 +29,77 @@ export function rectsOverlap(a: Rect, b: Rect, pad = 0): boolean {
   );
 }
 
-export interface PetChromeLayout {
-  window: { width: number; height: number };
-  stage: Rect;
-  sidebar: Rect | null;
-  face: Rect;
-  dockTab: Rect;
+function clamp(value: number, min: number, max: number): number {
+  if (max < min) return min;
+  return Math.min(max, Math.max(min, value));
 }
 
 /**
- * Character stage stays the crop. Settings / HUD use a right-side rail so they
- * never cover the face and never stretch the Live2D view.
+ * Place a settings popup beside the face (prefer right, then left, then below).
+ * Used after the window grows a temporary popup strip, and after the user drags.
  */
-export function petChromeLayout(
+export function placePopupAwayFromFace(
+  face: Rect,
+  popup: { width: number; height: number },
+  viewport: { width: number; height: number },
+  pad = 8,
+): { x: number; y: number } {
+  const maxX = Math.max(pad, viewport.width - popup.width - pad);
+  const maxY = Math.max(pad, viewport.height - popup.height - pad);
+  const y = clamp(face.y + pad, pad, maxY);
+
+  const rightX = face.x + face.width + pad;
+  const leftX = face.x - popup.width - pad;
+  let x = rightX;
+  if (rightX <= maxX) x = rightX;
+  else if (leftX >= pad) x = leftX;
+  else x = maxX;
+
+  let placed: Rect = { x, y, width: popup.width, height: popup.height };
+  if (rectsOverlap(placed, face, pad)) {
+    x = maxX;
+    placed = { x, y, width: popup.width, height: popup.height };
+  }
+  if (rectsOverlap(placed, face, pad)) {
+    const below = face.y + face.height + pad;
+    placed = { x, y: clamp(below, pad, maxY), width: popup.width, height: popup.height };
+  }
+  return { x: Math.round(placed.x), y: Math.round(placed.y) };
+}
+
+export interface PetPopupLayout {
+  window: { width: number; height: number };
+  stage: Rect;
+  face: Rect;
+  popup: Rect | null;
+}
+
+/** Crop stays on the left. An open settings popup uses a temporary strip to the right. */
+export function petPopupLayout(
   full: { width: number; height: number },
   preset: DisplayPresetId,
-  sidebarOpen: boolean,
-): PetChromeLayout {
+  menuOpen: boolean,
+  popupHeight = 320,
+): PetPopupLayout {
   const crop = croppedWindowSize(full, preset);
   const stage: Rect = { x: 0, y: 0, width: crop.width, height: crop.height };
   const face = faceSafeRect(crop);
-  const dockTab = dockTabRect(crop);
-  if (!sidebarOpen) {
-    return { window: crop, stage, sidebar: null, face, dockTab };
+  if (!menuOpen) {
+    return { window: crop, stage, face, popup: null };
   }
-  const sidebar: Rect = {
-    x: crop.width,
-    y: 0,
-    width: SETTINGS_SIDEBAR_WIDTH,
+  const windowSize = {
+    width: crop.width + SETTINGS_POPUP_WIDTH,
     height: crop.height,
   };
+  const popupSize = {
+    width: SETTINGS_POPUP_WIDTH - 8,
+    height: Math.min(popupHeight, Math.max(120, crop.height - 16)),
+  };
+  const pos = placePopupAwayFromFace(face, popupSize, windowSize);
   return {
-    window: { width: crop.width + SETTINGS_SIDEBAR_WIDTH, height: crop.height },
+    window: windowSize,
     stage,
-    sidebar,
     face,
-    dockTab,
+    popup: { ...pos, ...popupSize },
   };
 }

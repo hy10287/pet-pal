@@ -41,7 +41,7 @@ export function placeAt(x: number, y: number, lock: { width: number; height: num
 
 /**
  * Keep the current top-left when chrome width changes, then clamp into the work area
- * so a right-side settings rail cannot run off-screen (and does not change crop height).
+ * so a temporary settings popup strip cannot run off-screen (crop height stays locked).
  */
 export function placeChromeBounds(
   current: WindowRect,

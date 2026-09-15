@@ -1,9 +1,11 @@
 import type { CatalogItem, DisplayPresetId } from "../shared/types";
 import { DISPLAY_PRESETS, USER_SCALE_MAX, USER_SCALE_MIN } from "../shared/display-preset";
+import { faceSafeRect, placePopupAwayFromFace, type Rect } from "../shared/ui-chrome";
 
 export interface MenuHooks {
   onOpen?: (info?: { menuHeight: number; clientX: number; clientY: number }) => void;
   onClose?: () => void;
+  faceRect?: () => Rect;
 }
 
 export type MenuCommand =
@@ -86,22 +88,40 @@ export function bindContextMenu(
   root: HTMLElement,
   menu: HTMLElement,
   onCommand: (command: MenuCommand) => void,
-  hooks: MenuHooks & { getState: () => MenuState; dockTab?: HTMLElement | null },
-): { close: () => void; isOpen: () => boolean } {
+  hooks: MenuHooks & { getState: () => MenuState; isBusy?: () => boolean },
+): { close: () => void; isOpen: () => boolean; lastClosedAt: () => number } {
+  let openedAt = 0;
+  let lastClosedAt = 0;
   let open = false;
+  let outsidePointer = false;
 
   const hide = () => {
     if (!open) return;
     open = false;
+    lastClosedAt = performance.now();
     menu.hidden = true;
     hooks.onClose?.();
   };
 
+  const place = () => {
+    const rect = menu.getBoundingClientRect();
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    const face = hooks.faceRect?.() ?? faceSafeRect(viewport);
+    const pos = placePopupAwayFromFace(face, { width: rect.width, height: rect.height }, viewport);
+    menu.style.left = `${pos.x}px`;
+    menu.style.top = `${pos.y}px`;
+  };
+
   const show = (clientX = 0, clientY = 0) => {
     open = true;
+    openedAt = performance.now();
     renderMenu(menu, hooks.getState(), onCommand, hide);
     menu.hidden = false;
     hooks.onOpen?.({ menuHeight: 0, clientX, clientY });
+    requestAnimationFrame(() => {
+      place();
+      requestAnimationFrame(place);
+    });
   };
 
   const toggle = (clientX: number, clientY: number) => {
@@ -116,17 +136,32 @@ export function bindContextMenu(
     toggle(event.clientX, event.clientY);
   });
 
-  hooks.dockTab?.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    toggle(0, 0);
-  });
-
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && open) hide();
   });
 
-  return { close: hide, isOpen: () => open };
+  window.addEventListener(
+    "pointerdown",
+    (event) => {
+      if (!open || event.button !== 0) return;
+      const inMenu = menu.contains(event.target as Node);
+      outsidePointer = shouldDismissMenu(openedAt, performance.now(), inMenu);
+    },
+    true,
+  );
+
+  window.addEventListener(
+    "pointerup",
+    (event) => {
+      if (!outsidePointer || event.button !== 0) return;
+      outsidePointer = false;
+      if (!open || hooks.isBusy?.()) return;
+      hide();
+    },
+    true,
+  );
+
+  return { close: hide, isOpen: () => open, lastClosedAt: () => lastClosedAt };
 }
 
 export function renderMenu(
@@ -153,6 +188,7 @@ export function renderMenu(
     hide();
   });
   headingRow.append(title, close);
+  bindMenuDrag(headingRow, menu);
   menu.append(headingRow);
 
   menu.append(
@@ -259,6 +295,41 @@ export function renderMenu(
       }),
     ]),
   );
+}
+
+/** Drag the popup by its header so it can be moved off the character. */
+export function bindMenuDrag(handle: HTMLElement, menu: HTMLElement): void {
+  let dragging = false;
+  let origin = { x: 0, y: 0, left: 0, top: 0 };
+
+  handle.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    if ((event.target as HTMLElement | null)?.closest?.(".menu-close")) return;
+    dragging = true;
+    origin = {
+      x: event.clientX,
+      y: event.clientY,
+      left: menu.offsetLeft,
+      top: menu.offsetTop,
+    };
+    handle.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    event.stopPropagation();
+  });
+
+  handle.addEventListener("pointermove", (event) => {
+    if (!dragging) return;
+    const x = origin.left + event.clientX - origin.x;
+    const y = origin.top + event.clientY - origin.y;
+    const maxX = Math.max(8, window.innerWidth - menu.offsetWidth - 8);
+    const maxY = Math.max(8, window.innerHeight - menu.offsetHeight - 8);
+    menu.style.left = `${Math.min(maxX, Math.max(8, x))}px`;
+    menu.style.top = `${Math.min(maxY, Math.max(8, y))}px`;
+  });
+
+  handle.addEventListener("pointerup", () => {
+    dragging = false;
+  });
 }
 
 function section(title: string, children: HTMLElement[]): HTMLElement {

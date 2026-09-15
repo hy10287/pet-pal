@@ -30,13 +30,13 @@ export function clampUserScale(value: number): number {
   return Math.max(USER_SCALE_MIN, Math.min(USER_SCALE_MAX, value));
 }
 
-/** Right-side settings/HUD rail. Crop height is never used as extra chrome. */
-export const SETTINGS_SIDEBAR_WIDTH = 240;
+/** Temporary width added while the right-click settings popup is open. */
+export const SETTINGS_POPUP_WIDTH = 240;
 
 export interface WindowChromeState {
   hudOn?: boolean;
   menuOpen?: boolean;
-  /** Ignored for sizing (sidebar is a fixed-width rail). Kept for older callers. */
+  /** Ignored for sizing (popup uses a fixed-width strip). Kept for older callers. */
   menuHeight?: number;
 }
 
@@ -97,8 +97,8 @@ export function resolveFullWindow(
 
 /**
  * Electron outer size for a preset.
- * Character crop (height) is stable. Settings / HUD add a right-side rail
- * so overlays never stretch the Live2D view or cover the face.
+ * Character crop (height) is stable. The right-click settings popup may add a
+ * temporary strip so the panel sits beside the face; HUD does not grow the window.
  */
 export function displayWindowSize(
   full: { width: number; height: number },
@@ -106,9 +106,8 @@ export function displayWindowSize(
   chrome: WindowChromeState = {},
 ): { width: number; height: number } {
   const crop = croppedWindowSize(full, preset);
-  const sidebar = Boolean(chrome.menuOpen || chrome.hudOn);
   return {
-    width: crop.width + (sidebar ? SETTINGS_SIDEBAR_WIDTH : 0),
+    width: crop.width + (chrome.menuOpen ? SETTINGS_POPUP_WIDTH : 0),
     height: crop.height,
   };
 }

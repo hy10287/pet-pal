@@ -27,7 +27,8 @@ import { FallbackActor } from "./fallback-actor";
 import { hudSnapshot, renderHud } from "./hud";
 import { loadCubismCore, loadLive2DModel } from "./live2d-actor";
 import { SCALE_MAX, SCALE_MIN, bindContextMenu, bodyMotionsForMenu } from "./menu";
-import { displayWindowSize } from "../shared/display-preset";
+import { croppedWindowSize, displayWindowSize } from "../shared/display-preset";
+import { faceSafeRect } from "../shared/ui-chrome";
 
 const HOVER_DWELL_MS = 1200;
 const DOUBLE_MS = 320;
@@ -36,8 +37,6 @@ async function main(): Promise<void> {
   const boot = await getBootstrap();
   const bridge = getBridge();
   const stageEl = document.getElementById("stage") as HTMLElement;
-  const sidebarEl = document.getElementById("sidebar") as HTMLElement | null;
-  const dockTab = document.getElementById("dock-tab") as HTMLButtonElement | null;
   const hudEl = document.getElementById("hud") as HTMLElement;
   const menuEl = document.getElementById("menu") as HTMLElement;
   const chatEl = ensureChatRoot(document.getElementById("chat"));
@@ -67,13 +66,7 @@ async function main(): Promise<void> {
   let displayPreset: DisplayPresetId = parseDisplayPreset(boot.config.displayPreset);
 
   const syncStageCrop = () => {
-    const size = applyStageCrop(document.getElementById("stage"), fullWindow, displayPreset);
-    const wrap = document.getElementById("stage-wrap");
-    if (wrap) {
-      wrap.style.width = `${size.width}px`;
-      wrap.style.height = `${size.height}px`;
-    }
-    return size;
+    return applyStageCrop(document.getElementById("stage"), fullWindow, displayPreset);
   };
 
   if (preview) {
@@ -136,7 +129,6 @@ async function main(): Promise<void> {
   let downZone: "head" | "face" | "body" | "empty" = "empty";
   let dragOrigin = { x: 0, y: 0 };
   let dragActive = false;
-  let dismissSettingsOnClick = false;
   let patStroke = 0;
   let patPlayed = false;
   let patIdleTimer: number | undefined;
@@ -206,7 +198,7 @@ async function main(): Promise<void> {
   const chat = bindChatBubble(chatEl, {
     onOpen: () => {
       bridge.setHoverOpaque(true);
-      bridge.setMenuOpen(settingsOpen || hudOn);
+      bridge.setMenuOpen(settingsOpen);
     },
     onClose: () => syncChrome(),
     onReply: (_text, reply) => {
@@ -215,18 +207,13 @@ async function main(): Promise<void> {
   });
 
   const syncChrome = () => {
-    const noticeOn = Boolean(noticeEl && !noticeEl.hidden);
-    const rail = settingsOpen || hudOn || noticeOn;
-    if (sidebarEl) sidebarEl.hidden = !rail;
-    dockTab?.setAttribute("aria-expanded", rail ? "true" : "false");
-    dockTab?.setAttribute("title", rail ? "收起设置" : "设置");
     if (preview) {
-      const size = displayWindowSize(fullWindow, displayPreset, { hudOn, menuOpen: rail });
+      const size = displayWindowSize(fullWindow, displayPreset, { menuOpen: settingsOpen });
       document.body.style.width = `${size.width}px`;
       document.body.style.height = `${size.height}px`;
     }
-    bridge.setMenuOpen(rail);
-    if (rail || chat.isOpen()) bridge.setHoverOpaque(true);
+    bridge.setMenuOpen(settingsOpen);
+    if (settingsOpen || chat.isOpen()) bridge.setHoverOpaque(true);
   };
 
   const settings = bindContextMenu(
@@ -248,7 +235,6 @@ async function main(): Promise<void> {
         void bridge.setUiChrome?.({ hudOn });
         void bridge.saveConfig({ debugHud: hudOn });
         syncHud(true);
-        syncChrome();
       }
       if (command.type === "toggle-click-through") {
         clickThrough = !clickThrough;
@@ -259,7 +245,6 @@ async function main(): Promise<void> {
       if (command.type === "quit") bridge.quit();
     },
     {
-      dockTab,
       getState: () => ({
         scale,
         hudOn,
@@ -268,6 +253,8 @@ async function main(): Promise<void> {
         displayPreset,
         motions: bodyMotionsForMenu(boot.catalog.items),
       }),
+      faceRect: () => faceSafeRect(croppedWindowSize(fullWindow, displayPreset)),
+      isBusy: () => dragActive,
       onOpen: () => {
         settingsOpen = true;
         chat.close();
@@ -280,18 +267,10 @@ async function main(): Promise<void> {
     },
   );
 
-  const markChromeHover = (opaque: boolean) => {
-    if (opaque) {
-      bridge.setHoverOpaque(true);
-      return;
-    }
-    if (settingsOpen || hudOn) return;
-    bridge.setHoverOpaque(false);
-  };
-  dockTab?.addEventListener("pointerenter", () => markChromeHover(true));
-  dockTab?.addEventListener("pointerleave", () => markChromeHover(false));
-  sidebarEl?.addEventListener("pointerenter", () => markChromeHover(true));
-  sidebarEl?.addEventListener("pointerleave", () => markChromeHover(false));
+  menuEl.addEventListener("pointerenter", () => bridge.setHoverOpaque(true));
+  menuEl.addEventListener("pointerleave", () => {
+    if (!settingsOpen) bridge.setHoverOpaque(false);
+  });
   syncChrome();
 
   bridge.onCommand((command) => {
@@ -310,7 +289,6 @@ async function main(): Promise<void> {
       void bridge.setUiChrome?.({ hudOn });
       void bridge.saveConfig({ debugHud: hudOn });
       syncHud(true);
-      syncChrome();
     }
     if (command === "toggle-click-through") {
       clickThrough = !clickThrough;
@@ -325,7 +303,6 @@ async function main(): Promise<void> {
       void bridge.setUiChrome?.({ hudOn });
       void bridge.saveConfig({ debugHud: hudOn });
       syncHud(true);
-      syncChrome();
     }
   });
 
@@ -336,7 +313,6 @@ async function main(): Promise<void> {
     dragActive = false;
     patPlayed = false;
     patStroke = 0;
-    dismissSettingsOnClick = settingsOpen && event.button === 0;
     downButton = event.button;
     downZone = actor.hitTest(event.clientX, event.clientY);
     dragOrigin = { x: event.screenX, y: event.screenY };
@@ -346,7 +322,7 @@ async function main(): Promise<void> {
 
   canvas.addEventListener("pointermove", (event) => {
     pointer = { x: event.clientX, y: event.clientY, over: actor.contains(event.clientX, event.clientY) };
-    if (!settingsOpen && !hudOn && !chat.isOpen()) bridge.setHoverOpaque(pointer.over);
+    if (!settingsOpen && !chat.isOpen()) bridge.setHoverOpaque(pointer.over);
     const held = downButton === 1 ? (event.buttons & 4) === 4 : (event.buttons & 1) === 1;
     if (held) {
       const dx = event.screenX - dragOrigin.x;
@@ -365,7 +341,6 @@ async function main(): Promise<void> {
           play("head-pat");
         }
       } else if (gesture === "window-drag") {
-        dismissSettingsOnClick = false;
         if (!dragActive) {
           dragActive = true;
           bridge.dragStart?.();
@@ -385,16 +360,13 @@ async function main(): Promise<void> {
   canvas.addEventListener("pointerup", (event) => {
     if (event.button !== 0 && event.button !== 1) return;
     const ended = gesture;
-    const dismiss = dismissSettingsOnClick;
-    dismissSettingsOnClick = false;
     gesture = "none";
     if (ended === "window-drag" || dragActive) {
       dragActive = false;
       bridge.dragEnd?.();
       return;
     }
-    if (dismiss) {
-      settings.close();
+    if (performance.now() - settings.lastClosedAt() < 400) {
       return;
     }
     if (ended === "head-pat") {
@@ -443,8 +415,8 @@ async function main(): Promise<void> {
     hoverSince = null;
     hoverFired = false;
     const to = event.relatedTarget as Node | null;
-    if (dockTab?.contains(to) || sidebarEl?.contains(to)) return;
-    if (!settingsOpen && !hudOn && !chat.isOpen()) bridge.setHoverOpaque(false);
+    if (menuEl.contains(to)) return;
+    if (!settingsOpen && !chat.isOpen()) bridge.setHoverOpaque(false);
   });
 
   // Wheel zoom is intentionally not restored.

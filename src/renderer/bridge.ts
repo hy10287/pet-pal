@@ -26,14 +26,13 @@ export function createWebBridge(): NoriBridge {
     },
     setUiChrome: async (state) => {
       const boot = await getBootstrap();
-      const rail = Boolean(state.hudOn || state.menuOpen);
       const size = displayWindowSize(boot.config.window, parseDisplayPreset(boot.config.displayPreset), {
         hudOn: Boolean(state.hudOn),
-        menuOpen: rail,
+        menuOpen: Boolean(state.menuOpen),
       });
       document.body.style.width = `${size.width}px`;
       document.body.style.height = `${size.height}px`;
-      return { ...size, hudOn: Boolean(state.hudOn), menuOpen: rail, menuHeight: state.menuHeight };
+      return { ...size, hudOn: Boolean(state.hudOn), menuOpen: Boolean(state.menuOpen), menuHeight: state.menuHeight };
     },
     setDisplayPreset: async (preset: DisplayPresetId) => {
       const boot = await getBootstrap();

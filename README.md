@@ -102,11 +102,11 @@ Demo 的 sample catalog 即使没有真实 motion 文件，也会用参数混合
 | 双击 | 兴奋 / 闪光（`eventOnly` 可入选） |
 | 单击身体 | 点头或歪头回应 |
 | 悬停 1.2s | 好奇注视 |
-| 右键 / 右侧「设置」页签 | 打开侧边设置栏（不挡脸） |
+| 右键 | 打开设置弹层（贴在角色旁，可拖标题栏；点空白 / Esc / 再右键关闭） |
 | 设置 · 大小 | 缩放 0.6–1.8（仅此滑杆，无滚轮缩放） |
 | 设置 · 显示范围 | 窗口裁切：头肩 / 上半身 / 到腰 / 全身 |
 | 设置 · 贴边吸附 | 默认关；开时拖到距屏幕工作区边缘 ≤8px 松手对齐 |
-| 右键设置 | 待机 / 随机情绪 / 穿透 / HUD / 退出 |
+| 设置 · 系统 | 待机 / 随机情绪 / 穿透 / HUD / 退出 |
 | 鼠标移动 | `ParamAngle*` / `ParamEyeBall*` 阻尼跟随 |
 | `H` | 调试 HUD（当前 intent + face/body id，显示在侧栏） |
 | 托盘 | 退出等 |
@@ -149,7 +149,7 @@ Electron 主进程
 └── src/main/preview-server.ts   浏览器预览
 
 渲染进程
-├── src/renderer/pet.ts           交互循环、缩放、侧边设置
+├── src/renderer/pet.ts           交互循环、缩放、右键设置
 ├── src/renderer/live2d-actor.ts  PIXI v7 + pixi-live2d-display/cubism4
 └── src/renderer/fallback-actor.ts 原创占位角色
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_FULL_WINDOW,
-  SETTINGS_SIDEBAR_WIDTH,
+  SETTINGS_POPUP_WIDTH,
   MIN_WINDOW_HEIGHT,
   croppedWindowSize,
   displayWindowSize,
@@ -84,24 +84,29 @@ describe("displayWindowSize", () => {
     expect(heights).toEqual([...heights].sort((a, b) => a - b));
   });
 
-  it("adds a fixed-width settings rail instead of growing crop height", () => {
-    const open = displayWindowSize(FULL, "compact", { menuOpen: true, menuHeight: 420 });
-    expect(open.height).toBe(179);
-    expect(open.width).toBe(FULL.width + SETTINGS_SIDEBAR_WIDTH);
-    expect(displayWindowSize(FULL, "compact", { menuOpen: false }).height).toBe(179);
+  it("does not grow the window just because HUD is on", () => {
+    expect(displayWindowSize(FULL, "compact", { hudOn: true })).toEqual(croppedWindowSize(FULL, "compact"));
+    expect(displayWindowSize(FULL, "balanced", { hudOn: true }).width).toBe(FULL.width);
   });
 
-  it("uses the same rail width when HUD is on without a measured menu height", () => {
+  it("adds a temporary popup strip while the right-click menu is open, not crop height", () => {
+    const open = displayWindowSize(FULL, "compact", { menuOpen: true, menuHeight: 420 });
+    expect(open.height).toBe(179);
+    expect(open.width).toBe(FULL.width + SETTINGS_POPUP_WIDTH);
+    expect(displayWindowSize(FULL, "compact", { menuOpen: false }).height).toBe(179);
+    expect(displayWindowSize(FULL, "compact", { menuOpen: false }).width).toBe(FULL.width);
+  });
+
+  it("ignores HUD when deciding popup chrome", () => {
     const open = displayWindowSize(FULL, "balanced", { hudOn: true });
     expect(open.height).toBe(246);
-    expect(open.width).toBe(FULL.width + SETTINGS_SIDEBAR_WIDTH);
-    expect(open.height).not.toBe(FULL.height);
+    expect(open.width).toBe(FULL.width);
   });
 
   it("never grows height past the crop, even with a tall menu measurement", () => {
     const open = displayWindowSize(FULL, "compact", { menuOpen: true, menuHeight: 900 });
     expect(open.height).toBe(179);
-    expect(open.width).toBe(FULL.width + SETTINGS_SIDEBAR_WIDTH);
+    expect(open.width).toBe(FULL.width + SETTINGS_POPUP_WIDTH);
   });
 });
 
