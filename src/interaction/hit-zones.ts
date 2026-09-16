@@ -9,7 +9,7 @@ export function mapHitAreaName(name: string): HitZone {
     return key.includes("face") ? "face" : "head";
   }
   if (BODY_NAMES.some((token) => key.includes(token))) return "body";
-  return "body";
+  return "empty";
 }
 
 export function geometricHitZone(

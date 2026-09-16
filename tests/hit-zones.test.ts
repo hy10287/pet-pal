@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fallbackHitZone, geometricHitZone, isHeadZone } from "../src/interaction/hit-zones";
+import { fallbackHitZone, geometricHitZone, isHeadZone, mapHitAreaName } from "../src/interaction/hit-zones";
 
 describe("geometricHitZone", () => {
   const bounds = { x: 0, y: 0, width: 100, height: 100 };
@@ -31,5 +31,17 @@ describe("fallbackHitZone", () => {
 
   it("maps empty space around the pet", () => {
     expect(fallbackHitZone(200, 200)).toBe("empty");
+  });
+});
+
+describe("mapHitAreaName", () => {
+  it("maps named head and body hit areas", () => {
+    expect(mapHitAreaName("HitAreaHead")).toBe("head");
+    expect(mapHitAreaName("Face")).toBe("face");
+    expect(mapHitAreaName("Body")).toBe("body");
+  });
+
+  it("maps unknown hit areas to empty instead of body", () => {
+    expect(mapHitAreaName("UnknownThing")).toBe("empty");
   });
 });

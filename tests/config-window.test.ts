@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/main/config";
 
 describe("loadAppConfig window baseline", () => {
-  it("lifts a saved crop height back to the full-body baseline", () => {
+  it("keeps an explicit window when displayPreset is present", () => {
     const dir = mkdtempSync(join(tmpdir(), "nori-config-"));
     writeFileSync(
       join(dir, "app.config.json"),
@@ -15,9 +15,18 @@ describe("loadAppConfig window baseline", () => {
       }),
     );
     const loaded = loadAppConfig("/nonexistent-nori-root", dir);
-    expect(loaded.config.window).toEqual({ width: 420, height: 560 });
+    expect(loaded.config.window.height).toBe(246);
+    expect(loaded.config.window).toEqual({ width: 420, height: 246 });
     expect(loaded.config.displayPreset).toBe("balanced");
     expect(loaded.config.edgeSnap).toBe(false);
+  });
+
+  it("lifts a saved crop height when displayPreset is missing", () => {
+    const dir = mkdtempSync(join(tmpdir(), "nori-config-"));
+    writeFileSync(join(dir, "app.config.json"), JSON.stringify({ window: { width: 420, height: 246 } }));
+    const loaded = loadAppConfig("/nonexistent-nori-root", dir);
+    expect(loaded.config.window.height).toBe(560);
+    expect(loaded.config.window).toEqual({ width: 420, height: 560 });
   });
 
   it("only enables edge snap when the saved flag is true", () => {

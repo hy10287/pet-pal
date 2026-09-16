@@ -30,6 +30,10 @@ export function snapRectToEdges(
   };
   if (!enabled || distance < 0) return next;
 
+  const insideX = rect.x >= area.x && rect.x + rect.width <= area.x + area.width;
+  const insideY = rect.y >= area.y && rect.y + rect.height <= area.y + area.height;
+  if (!insideX || !insideY) return next;
+
   const left = rect.x - area.x;
   const right = area.x + area.width - (rect.x + rect.width);
   const top = rect.y - area.y;

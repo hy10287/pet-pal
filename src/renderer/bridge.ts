@@ -34,7 +34,6 @@ export function createWebBridge(): NoriBridge {
         height,
         hudOn: Boolean(state.hudOn),
         menuOpen: Boolean(state.menuOpen),
-        menuHeight: state.menuHeight,
       };
     },
     setDisplayPreset: async (preset: DisplayPresetId) => {

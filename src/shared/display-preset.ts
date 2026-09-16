@@ -33,8 +33,6 @@ export function clampUserScale(value: number): number {
 export interface WindowChromeState {
   hudOn?: boolean;
   menuOpen?: boolean;
-  /** Ignored for sizing. Kept for older callers. */
-  menuHeight?: number;
 }
 
 export function parseDisplayPreset(value: unknown): DisplayPresetId {

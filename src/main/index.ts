@@ -133,7 +133,6 @@ app.whenReady().then(() => {
   let applyingPreset = false;
   let applyGen = 0;
   let menuOpen = false;
-  let menuHeight = 0;
   let hudOn = false;
   let dragging = false;
   let dragOffset = { x: 0, y: 0 };
@@ -230,12 +229,11 @@ app.whenReady().then(() => {
 
   ipcMain.handle(
     "nori:set-ui-chrome",
-    (_event, state: { hudOn?: boolean; menuOpen?: boolean; menuHeight?: number }) => {
+    (_event, state: { hudOn?: boolean; menuOpen?: boolean }) => {
       if (typeof state?.hudOn === "boolean") hudOn = state.hudOn;
       if (typeof state?.menuOpen === "boolean") menuOpen = state.menuOpen;
-      if (typeof state?.menuHeight === "number" && state.menuHeight > 0) menuHeight = state.menuHeight;
       applyWindowChrome();
-      return { ...lockedSize, hudOn, menuOpen, menuHeight };
+      return { ...lockedSize, hudOn, menuOpen };
     },
   );
 

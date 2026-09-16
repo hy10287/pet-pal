@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { overlayViewport, shouldDismissMenu } from "../src/renderer/menu";
 
 describe("shouldDismissMenu", () => {
@@ -28,5 +30,17 @@ describe("overlayViewport", () => {
       width: 420,
       height: 560,
     });
+  });
+});
+
+describe("HUD toggle label", () => {
+  it("refreshes the HUD button label without closing the panel", () => {
+    const source = readFileSync(resolve(__dirname, "../src/renderer/menu.ts"), "utf8");
+    expect(source).toContain("state.hudOn = next");
+    expect(source).toContain('hudBtn.textContent = next ? "隐藏调试 HUD" : "显示调试 HUD"');
+    const start = source.indexOf("const hudBtn = actionButton");
+    const hudHandler = source.slice(start, source.indexOf("menu.append(", start));
+    expect(hudHandler).toContain("const hudBtn");
+    expect(hudHandler).not.toContain("hide()");
   });
 });

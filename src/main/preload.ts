@@ -12,12 +12,11 @@ export interface NoriBridge {
   setDisplayPreset: (
     preset: DisplayPresetId,
   ) => Promise<{ width: number; height: number; displayPreset: DisplayPresetId }>;
-  setUiChrome: (state: { hudOn?: boolean; menuOpen?: boolean; menuHeight?: number }) => Promise<{
+  setUiChrome: (state: { hudOn?: boolean; menuOpen?: boolean }) => Promise<{
     width: number;
     height: number;
     hudOn: boolean;
     menuOpen: boolean;
-    menuHeight?: number;
   }>;
   moveBy: (dx: number, dy: number) => void;
   dragStart: () => void;

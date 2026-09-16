@@ -2,7 +2,7 @@ import type { CatalogItem, DisplayPresetId } from "../shared/types";
 import { DISPLAY_PRESETS, USER_SCALE_MAX, USER_SCALE_MIN } from "../shared/display-preset";
 
 export interface MenuHooks {
-  onOpen?: (info?: { menuHeight: number; clientX: number; clientY: number }) => void;
+  onOpen?: () => void;
   onClose?: () => void;
 }
 
@@ -279,12 +279,16 @@ export function renderMenu(
     snapBtn.textContent = next ? "贴边吸附：开" : "贴边吸附：关";
   });
   snapBtn.dataset.edgeSnap = "1";
+  const hudBtn = actionButton(state.hudOn ? "隐藏调试 HUD" : "显示调试 HUD", () => {
+    onCommand({ type: "toggle-hud" });
+    const next = !state.hudOn;
+    state.hudOn = next;
+    hudBtn.textContent = next ? "隐藏调试 HUD" : "显示调试 HUD";
+  });
   menu.append(
     section("系统", [
       snapBtn,
-      actionButton(state.hudOn ? "隐藏调试 HUD" : "显示调试 HUD", () => {
-        onCommand({ type: "toggle-hud" });
-      }),
+      hudBtn,
       actionButton(state.clickThrough ? "关闭鼠标穿透" : "打开鼠标穿透", () => {
         hide();
         onCommand({ type: "toggle-click-through" });
