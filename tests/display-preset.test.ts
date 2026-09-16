@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_FULL_WINDOW,
-  SETTINGS_POPUP_WIDTH,
   MIN_WINDOW_HEIGHT,
   croppedWindowSize,
   displayWindowSize,
@@ -89,12 +88,11 @@ describe("displayWindowSize", () => {
     expect(displayWindowSize(FULL, "balanced", { hudOn: true }).width).toBe(FULL.width);
   });
 
-  it("adds a temporary popup strip while the right-click menu is open, not crop height", () => {
+  it("does not grow a side strip while the right-click menu is open", () => {
     const open = displayWindowSize(FULL, "compact", { menuOpen: true, menuHeight: 420 });
-    expect(open.height).toBe(179);
-    expect(open.width).toBe(FULL.width + SETTINGS_POPUP_WIDTH);
-    expect(displayWindowSize(FULL, "compact", { menuOpen: false }).height).toBe(179);
-    expect(displayWindowSize(FULL, "compact", { menuOpen: false }).width).toBe(FULL.width);
+    expect(open).toEqual(croppedWindowSize(FULL, "compact"));
+    expect(displayWindowSize(FULL, "compact", { menuOpen: false })).toEqual(open);
+    expect(open.width).toBe(FULL.width);
   });
 
   it("ignores HUD when deciding popup chrome", () => {
@@ -103,10 +101,9 @@ describe("displayWindowSize", () => {
     expect(open.width).toBe(FULL.width);
   });
 
-  it("never grows height past the crop, even with a tall menu measurement", () => {
+  it("never grows past the crop, even with a tall menu measurement", () => {
     const open = displayWindowSize(FULL, "compact", { menuOpen: true, menuHeight: 900 });
-    expect(open.height).toBe(179);
-    expect(open.width).toBe(FULL.width + SETTINGS_POPUP_WIDTH);
+    expect(open).toEqual(croppedWindowSize(FULL, "compact"));
   });
 });
 

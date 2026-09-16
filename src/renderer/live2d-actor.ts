@@ -6,7 +6,7 @@ import type { LookState } from "../interaction/mouse-follow";
 import type { ExpressionParams } from "./expression";
 import { FACE_PARAM_IDS } from "./expression";
 import type { PetActor } from "./actor";
-import { lockFullBodyFitted, topPinHome } from "./display-crop";
+import { lockFullBodyFitted, MODEL_ANCHOR_Y, bottomPinHome } from "./display-crop";
 import { visualScale } from "./fit-scale";
 import { pickMotionUrls } from "./motion-url";
 
@@ -66,7 +66,7 @@ export class Live2DActor implements PetActor {
   ) {
     model.autoFocus = false;
     model.autoInteract = false;
-    model.anchor?.set(0.5, 0.62);
+    model.anchor?.set(0.5, MODEL_ANCHOR_Y);
     this.view.addChild(model);
   }
 
@@ -193,7 +193,7 @@ export class Live2DActor implements PetActor {
   }
 
   private applyLayout(): void {
-    const { width } = this.viewSize;
+    const { width, height } = this.viewSize;
     this.ensureMeasured();
     this.fitted = lockFullBodyFitted(
       this.fitted,
@@ -205,13 +205,7 @@ export class Live2DActor implements PetActor {
     const fitted = this.fitted > 0 ? this.fitted : 0.22;
     this.model.scale?.set(visualScale(fitted, this.scaleValue));
     if (width <= 0) return;
-    this.home = topPinHome(
-      width,
-      this.natural.height,
-      fitted,
-      this.scaleValue,
-      this.baseline.height,
-    );
+    this.home = bottomPinHome(width, height, this.scaleValue, this.baseline.height);
     this.model.position.set(this.home.x, this.home.y);
   }
 

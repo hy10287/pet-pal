@@ -36,7 +36,7 @@ function clamp(value: number, min: number, max: number): number {
 
 /**
  * Place a settings popup beside the face (prefer right, then left, then below).
- * Used after the window grows a temporary popup strip, and after the user drags.
+ * The popup overlays the crop; the Electron window never grows a side strip.
  */
 export function placePopupAwayFromFace(
   face: Rect,
@@ -74,7 +74,7 @@ export interface PetPopupLayout {
   popup: Rect | null;
 }
 
-/** Crop stays on the left. An open settings popup uses a temporary strip to the right. */
+/** Crop is the whole window. An open settings popup overlays it and stays draggable. */
 export function petPopupLayout(
   full: { width: number; height: number },
   preset: DisplayPresetId,
@@ -87,17 +87,13 @@ export function petPopupLayout(
   if (!menuOpen) {
     return { window: crop, stage, face, popup: null };
   }
-  const windowSize = {
-    width: crop.width + SETTINGS_POPUP_WIDTH,
-    height: crop.height,
-  };
   const popupSize = {
-    width: SETTINGS_POPUP_WIDTH - 8,
-    height: Math.min(popupHeight, Math.max(120, crop.height - 16)),
+    width: Math.min(SETTINGS_POPUP_WIDTH - 8, Math.max(160, crop.width - 16)),
+    height: Math.min(popupHeight, Math.max(96, crop.height - 16)),
   };
-  const pos = placePopupAwayFromFace(face, popupSize, windowSize);
+  const pos = placePopupAwayFromFace(face, popupSize, crop);
   return {
-    window: windowSize,
+    window: crop,
     stage,
     face,
     popup: { ...pos, ...popupSize },

@@ -1,7 +1,7 @@
 import { clampUserScale, USER_SCALE_MAX, USER_SCALE_MIN } from "../shared/display-preset";
 
 export { clampUserScale, USER_SCALE_MAX, USER_SCALE_MIN };
-export const FIT_FILL = 0.86;
+export const FIT_FILL = 1;
 const MIN_NATURAL = 8;
 const MIN_VIEW = 32;
 

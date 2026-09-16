@@ -6,7 +6,7 @@ describe("fitScale", () => {
   it("fits an unscaled model into the view without using current scale", () => {
     const first = fitScale(2000, 2000, 420, 560);
     const afterFakeScaledBounds = fitScale(2000, 2000, 420, 560);
-    expect(first).toBeCloseTo((420 / 2000) * 0.86, 5);
+    expect(first).toBeCloseTo(420 / 2000, 5);
     expect(afterFakeScaledBounds).toBe(first);
   });
 

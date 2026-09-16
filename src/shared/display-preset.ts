@@ -30,13 +30,13 @@ export function clampUserScale(value: number): number {
   return Math.max(USER_SCALE_MIN, Math.min(USER_SCALE_MAX, value));
 }
 
-/** Temporary width added while the right-click settings popup is open. */
+/** Settings popup panel width. Overlay inside the crop — never extra window chrome. */
 export const SETTINGS_POPUP_WIDTH = 240;
 
 export interface WindowChromeState {
   hudOn?: boolean;
   menuOpen?: boolean;
-  /** Ignored for sizing (popup uses a fixed-width strip). Kept for older callers. */
+  /** Ignored for sizing. Kept for older callers. */
   menuHeight?: number;
 }
 
@@ -97,17 +97,13 @@ export function resolveFullWindow(
 
 /**
  * Electron outer size for a preset.
- * Character crop (height) is stable. The right-click settings popup may add a
- * temporary strip so the panel sits beside the face; HUD does not grow the window.
+ * Always the character crop so the pet can sit on the true screen edges.
+ * HUD and the right-click settings popup overlay inside this size.
  */
 export function displayWindowSize(
   full: { width: number; height: number },
   preset: DisplayPresetId,
-  chrome: WindowChromeState = {},
+  _chrome: WindowChromeState = {},
 ): { width: number; height: number } {
-  const crop = croppedWindowSize(full, preset);
-  return {
-    width: crop.width + (chrome.menuOpen ? SETTINGS_POPUP_WIDTH : 0),
-    height: crop.height,
-  };
+  return croppedWindowSize(full, preset);
 }

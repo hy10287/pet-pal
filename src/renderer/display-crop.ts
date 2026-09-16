@@ -23,13 +23,8 @@ export {
   resolveFullWindow,
 };
 
-export const MODEL_ANCHOR_Y = 0.62;
-
-/** Padding from the window top, relative to the full-body baseline height. */
-export function clipTopPx(fullHeight: number): number {
-  const base = Number.isFinite(fullHeight) && fullHeight > 0 ? fullHeight : 560;
-  return Math.max(8, base * 0.08);
-}
+/** Live2D / PIXI: bottom-center so scale grows from the display-range floor. */
+export const MODEL_ANCHOR_Y = 1;
 
 /**
  * Full-body contain-fit against the baseline window — never the cropped height.
@@ -54,33 +49,41 @@ export function lockFullBodyFitted(
   return lockFitted(current, naturalWidth, naturalHeight, fullWidth, fullHeight);
 }
 
-/** Horizontal center + top-pin so the head stays near the window top after a height crop. */
-export function topPinHome(
+/**
+ * Bottom-center home for a sprite whose PIXI anchor is (0.5, 1).
+ * At scale 1 the feet sit on the full-body floor (`fullHeight`).
+ * The visible crop's bottom edge is the scale origin, so enlarging grows
+ * upward instead of leaving a gap under the character.
+ */
+export function bottomPinHome(
   viewWidth: number,
-  naturalHeight: number,
-  fitted: number,
+  viewHeight: number,
   userScale: number,
   fullHeight: number,
-  anchorY = MODEL_ANCHOR_Y,
 ): { x: number; y: number } {
-  const scaledH = naturalHeight * fitted * Math.max(0.2, userScale);
+  const scale = Math.max(0.2, userScale);
+  const cropH = viewHeight > 0 ? viewHeight : fullHeight;
+  const baseH = Number.isFinite(fullHeight) && fullHeight > 0 ? fullHeight : cropH;
   return {
     x: viewWidth / 2,
-    y: clipTopPx(fullHeight) + anchorY * scaledH,
+    y: cropH + Math.max(0, baseH - cropH) * scale,
   };
 }
 
-/** Fallback actor: origin is not the Cubism anchor; pin by local top Y. */
-export function topPinFromLocalTop(
+/** Fallback actor: origin is not the Cubism anchor; pin by local bottom Y. */
+export function bottomPinFromLocalBottom(
   viewWidth: number,
-  localTop: number,
+  viewHeight: number,
+  localBottom: number,
   fitted: number,
   userScale: number,
   fullHeight: number,
 ): { x: number; y: number } {
+  const scale = Math.max(0.2, userScale);
+  const floor = bottomPinHome(viewWidth, viewHeight, userScale, fullHeight).y;
   return {
     x: viewWidth / 2,
-    y: clipTopPx(fullHeight) - localTop * fitted * Math.max(0.2, userScale),
+    y: floor - localBottom * fitted * scale,
   };
 }
 

@@ -20,7 +20,7 @@ import {
 import { startAgentControlServer, type AgentControlHandle, newIntentRequestId } from "./agent-control-server";
 import { applyClickThrough, commitPetWindowSize, createPetWindow, preloadPath, rendererHtml } from "./window";
 import { createTray } from "./tray";
-import { movedBounds, placeAt, placeChromeBounds, sameSize } from "./window-move";
+import { applyLockedSize, movedBounds, placeAt, sameSize } from "./window-move";
 
 const ROOT = join(__dirname, "../..");
 const preview = process.argv.includes("--preview");
@@ -142,7 +142,7 @@ app.whenReady().then(() => {
     });
     lockedSize.width = size.width;
     lockedSize.height = size.height;
-    const next = placeChromeBounds(win.getBounds(), lockedSize, screen.getDisplayMatching(win.getBounds()).workArea);
+    const next = applyLockedSize(win.getBounds(), lockedSize);
     const end = beginApply();
     commitPetWindowSize(win, lockedSize, next);
     end();

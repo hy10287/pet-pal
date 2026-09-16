@@ -12,6 +12,21 @@ describe("applyLockedSize", () => {
       height: 246,
     });
   });
+
+  it("does not pull a window off the true screen origin or slightly past an edge", () => {
+    expect(applyLockedSize({ x: 0, y: 0, width: 420, height: 246 }, lock)).toEqual({
+      x: 0,
+      y: 0,
+      width: 420,
+      height: 246,
+    });
+    expect(applyLockedSize({ x: -12, y: -8, width: 420, height: 246 }, lock)).toEqual({
+      x: -12,
+      y: -8,
+      width: 420,
+      height: 246,
+    });
+  });
 });
 
 describe("movedBounds / placeAt", () => {

@@ -40,8 +40,9 @@ export function placeAt(x: number, y: number, lock: { width: number; height: num
 }
 
 /**
- * Keep the current top-left when chrome width changes, then clamp into the work area
- * so a temporary settings popup strip cannot run off-screen (crop height stays locked).
+ * Keep the current top-left when the locked crop size changes (preset switch).
+ * Does not pull a window back into the work area — the pet can sit on the true
+ * screen edges. Optional edge-snap on drag-end is the only edge alignment.
  */
 export function placeChromeBounds(
   current: WindowRect,
