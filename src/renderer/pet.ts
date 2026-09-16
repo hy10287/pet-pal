@@ -29,6 +29,10 @@ import { loadCubismCore, loadLive2DModel } from "./live2d-actor";
 import { SCALE_MAX, SCALE_MIN, bindContextMenu, bodyMotionsForMenu } from "./menu";
 import { croppedWindowSize, displayWindowSize } from "../shared/display-preset";
 import { faceSafeRect } from "../shared/ui-chrome";
+import { TipBubbleController } from "../tips/message-center";
+import type { TipsConfig } from "../tips/schema";
+import { tipForInteraction } from "../tips/triggers";
+import { bindTipBubble } from "./tip-bubble";
 
 const HOVER_DWELL_MS = 1200;
 const DOUBLE_MS = 320;
@@ -41,6 +45,7 @@ async function main(): Promise<void> {
   const menuEl = document.getElementById("menu") as HTMLElement;
   const chatEl = ensureChatRoot(document.getElementById("chat"));
   const noticeEl = document.getElementById("notice") as HTMLElement;
+  const tipEl = document.getElementById("tip") as HTMLElement;
   const preview = boot.preview || !boot.isElectron;
 
   document.body.classList.toggle("preview", preview);
@@ -125,7 +130,34 @@ async function main(): Promise<void> {
   let edgeSnap = boot.config.edgeSnap === true;
   let hudOn = boot.config.debugHud || preview;
   let settingsOpen = false;
+  document.body.classList.toggle("hud-on", hudOn);
   void bridge.setUiChrome?.({ hudOn });
+
+  const tipsRef: { current: TipsConfig } = { current: await bridge.getTips() };
+  bridge.onTipsChanged((next) => {
+    tipsRef.current = next;
+  });
+  const currentVars = (): Record<string, string> => {
+    const now = new Date();
+    const file = (boot.config.modelPath || "").replace(/\\/g, "/").split("/").pop() ?? "";
+    const model = file.replace(/\.[^.]+$/, "") || "nori";
+    return {
+      hour: String(now.getHours()),
+      year: String(now.getFullYear()),
+      model,
+    };
+  };
+  const tipUi = bindTipBubble(tipEl);
+  const tipController = new TipBubbleController(
+    { show: (text, timeoutMs) => tipUi.show(text, timeoutMs), hide: () => tipUi.hide() },
+    () => tipsRef.current.quietHours,
+  );
+  bridge.onTip((msg) => {
+    tipController.push(msg, currentVars());
+  });
+  const syncTipSuppress = () => {
+    tipUi.setSuppressed(settingsOpen || menuEl.hidden === false);
+  };
   let currentParams: ExpressionParams = paramsForClip(null, null);
   let targetParams: ExpressionParams = currentParams;
   let playStartedAt = 0;
@@ -152,6 +184,7 @@ async function main(): Promise<void> {
     if (!force && next === lastHud && !hudEl.hidden === hudOn) return;
     lastHud = next;
     renderHud(hudEl, hudState(), hudOn);
+    document.body.classList.toggle("hud-on", hudOn);
   };
 
   const applyScale = (next: number, persist: boolean) => {
@@ -184,6 +217,17 @@ async function main(): Promise<void> {
     lastMotion = motionOffsets(pair.body ?? pair.face, 0);
     void actor.playClips(pair.face, pair.body).then(() => syncHud(true));
     syncHud(true);
+    if (
+      kind === "head-click" ||
+      kind === "head-pat" ||
+      kind === "body-click" ||
+      kind === "hover-dwell" ||
+      kind === "double-click"
+    ) {
+      if (kind === "hover-dwell" && clickThrough) return pair;
+      const msg = tipForInteraction(tipsRef.current, kind, currentVars());
+      if (msg) tipController.push(msg, currentVars());
+    }
     return pair;
   };
 
@@ -269,10 +313,12 @@ async function main(): Promise<void> {
         settingsOpen = true;
         chat.close();
         syncChrome();
+        syncTipSuppress();
       },
       onClose: () => {
         settingsOpen = false;
         syncChrome();
+        syncTipSuppress();
       },
     },
   );

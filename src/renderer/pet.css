@@ -42,6 +42,17 @@ body.preview {
   pointer-events: none;
 }
 
+#tip {
+  position: absolute; left: 8px; right: 8px; bottom: 8px;
+  z-index: 40; padding: 8px 10px; border-radius: 10px;
+  background: rgba(12,16,24,.78); color: #eef4ff;
+  font-size: 12px; line-height: 1.5;
+  max-height: min(44%, 96px); overflow: auto;
+  pointer-events: none; opacity: 0; transition: opacity .15s ease;
+}
+#tip.is-visible { opacity: 1; }
+body.hud-on #tip { bottom: 46%; }
+
 #hud {
   position: absolute;
   left: 8px;

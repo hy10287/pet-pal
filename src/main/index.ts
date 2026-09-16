@@ -21,6 +21,7 @@ import { startAgentControlServer, type AgentControlHandle, newIntentRequestId } 
 import { applyClickThrough, commitPetWindowSize, createPetWindow, preloadPath, rendererHtml } from "./window";
 import { createTray } from "./tray";
 import { applyLockedSize, movedBounds, placeAt, sameSize } from "./window-move";
+import { DEFAULT_TIPS } from "../tips/schema";
 
 const ROOT = join(__dirname, "../..");
 const preview = process.argv.includes("--preview");
@@ -181,6 +182,7 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("nori:bootstrap", () => bootstrapPayload());
+  ipcMain.handle("nori:tips:get", () => DEFAULT_TIPS);
 
   ipcMain.handle("nori:save-config", (_event, patch: Partial<AppConfig>) => {
     const next = { ...configState.config, ...patch, window: fullWindow };

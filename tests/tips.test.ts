@@ -8,6 +8,7 @@ import {
   shouldSuppressByQuietHours,
 } from "../src/tips/message-center";
 import { DEFAULT_TIPS, parseTips } from "../src/tips/schema";
+import { tipForInteraction } from "../src/tips/triggers";
 
 describe("shouldAccept", () => {
   it("accepts the first message when nothing is showing", () => {
@@ -111,5 +112,15 @@ describe("parseTips", () => {
     expect(parsed.value.schemaVersion).toBe(1);
     expect(parsed.value.welcome).toEqual(["今天也在这里。"]);
     expect(parsed.value.reactions["hover-dwell"][0]?.override).toBe(false);
+  });
+
+  it("returns null when a reaction has no text entries", () => {
+    const parsed = parseTips({
+      schemaVersion: 1,
+      reactions: { "head-click": [{ text: [] }, { text: ["", "  "] }] },
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(tipForInteraction(parsed.value, "head-click", { model: "nori" })).toBeNull();
   });
 });
