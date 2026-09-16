@@ -8,19 +8,21 @@ import {
   isAgentControlEnabled,
 } from "../shared/agent-control";
 import { displayWindowSize, parseDisplayPreset, resolveFullWindow } from "../shared/display-preset";
-import { EDGE_SNAP_PX, snapRectToEdges } from "../shared/edge-snap";
+import { EDGE_SNAP_PX } from "../shared/edge-snap";
 import {
   fileUrlIfExists,
   loadAppConfig,
   loadMotionCatalog,
   pathToFileUrl,
+  resolveLive2DModelFile,
   resolveRepoPath,
   saveAppConfig,
 } from "./config";
 import { startAgentControlServer, type AgentControlHandle, newIntentRequestId } from "./agent-control-server";
-import { applyClickThrough, commitPetWindowSize, createPetWindow, preloadPath, rendererHtml } from "./window";
+import { applyClickThrough, commitPetWindowSize, createPetWindow, placePetWindow, preloadPath, rendererHtml } from "./window";
 import { createTray } from "./tray";
-import { applyLockedSize, movedBounds, placeAt, sameSize } from "./window-move";
+import { applyLockedSize, placeAt, sameSize } from "./window-move";
+import { boundsDeficit, snapWindowByVisual } from "../shared/edge-place";
 
 const ROOT = join(__dirname, "../..");
 const preview = process.argv.includes("--preview");
@@ -75,7 +77,7 @@ function resolveCubismFile(root: string, configuredPath: string): string {
 function bootstrapPayload(): BootstrapPayload {
   const { config } = configState;
   const cubism = resolveCubismFile(ROOT, config.cubismCorePath);
-  const model = resolveRepoPath(ROOT, config.modelPath);
+  const model = resolveLive2DModelFile(ROOT, config.modelPath);
   const motions = resolveRepoPath(ROOT, config.motionsDir);
   return {
     config,
@@ -122,6 +124,27 @@ app.whenReady().then(() => {
   let hudOn = false;
   let dragging = false;
   let dragOffset = { x: 0, y: 0 };
+  let logical = { x: win.getBounds().x, y: win.getBounds().y };
+  let visualRect = { x: 0, y: 0, width: startSize.width, height: startSize.height };
+
+  const emitPlaceShift = (desired: { x: number; y: number }, actual: { x: number; y: number }) => {
+    if (win.isDestroyed()) return;
+    win.webContents.send("nori:place-shift", boundsDeficit(desired, actual));
+  };
+
+  const placeLogical = (x: number, y: number) => {
+    if (win.isDestroyed()) return;
+    logical = { x: Math.round(x), y: Math.round(y) };
+    const desired = placeAt(logical.x, logical.y, lockedSize);
+    const actual = placePetWindow(win, desired);
+    emitPlaceShift(desired, actual);
+  };
+
+  win.once("show", () => {
+    if (dragging) return;
+    const bounds = win.getBounds();
+    logical = { x: bounds.x, y: bounds.y };
+  });
 
   const beginApply = () => {
     applyingPreset = true;
@@ -142,9 +165,10 @@ app.whenReady().then(() => {
     });
     lockedSize.width = size.width;
     lockedSize.height = size.height;
-    const next = applyLockedSize(win.getBounds(), lockedSize);
+    const next = applyLockedSize({ ...win.getBounds(), x: logical.x, y: logical.y }, lockedSize);
     const end = beginApply();
     commitPetWindowSize(win, lockedSize, next);
+    placeLogical(next.x, next.y);
     end();
   };
 
@@ -168,6 +192,7 @@ app.whenReady().then(() => {
     if (!sameSize(bounds, lockedSize)) {
       const end = beginApply();
       commitPetWindowSize(win, lockedSize);
+      placeLogical(logical.x, logical.y);
       end();
     }
   });
@@ -222,42 +247,47 @@ app.whenReady().then(() => {
   // Legacy incremental move (kept for compatibility); prefer drag-start/move/end.
   ipcMain.on("nori:move-by", (_event, dx: number, dy: number) => {
     if (win.isDestroyed() || dragging) return;
-    const [x, y] = win.getPosition();
-    win.setBounds(movedBounds({ x, y, width: lockedSize.width, height: lockedSize.height }, dx, dy, lockedSize));
+    placeLogical(logical.x + dx, logical.y + dy);
+  });
+
+  ipcMain.on("nori:visual-rect", (_event, rect: { x: number; y: number; width: number; height: number }) => {
+    if (!rect || !Number.isFinite(rect.width) || !Number.isFinite(rect.height)) return;
+    visualRect = {
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+    };
   });
 
   ipcMain.on("nori:drag-start", () => {
     if (win.isDestroyed()) return;
     const point = screen.getCursorScreenPoint();
-    const [x, y] = win.getPosition();
-    dragOffset = { x: point.x - x, y: point.y - y };
+    dragOffset = { x: point.x - logical.x, y: point.y - logical.y };
     dragging = true;
   });
 
   ipcMain.on("nori:drag-move", () => {
     if (win.isDestroyed() || !dragging) return;
     const point = screen.getCursorScreenPoint();
-    win.setBounds(placeAt(point.x - dragOffset.x, point.y - dragOffset.y, lockedSize));
+    placeLogical(point.x - dragOffset.x, point.y - dragOffset.y);
   });
 
   ipcMain.on("nori:drag-end", () => {
     dragging = false;
     if (win.isDestroyed()) return;
     if (configState.config.edgeSnap) {
-      const bounds = win.getBounds();
-      const snapped = snapRectToEdges(
-        bounds,
-        screen.getDisplayMatching(bounds).workArea,
-        true,
-        EDGE_SNAP_PX,
-      );
-      if (snapped.x !== bounds.x || snapped.y !== bounds.y) {
-        const end = beginApply();
-        win.setBounds(placeAt(snapped.x, snapped.y, lockedSize));
-        end();
-      }
+      const display = screen.getDisplayMatching({
+        x: logical.x,
+        y: logical.y,
+        width: lockedSize.width,
+        height: lockedSize.height,
+      });
+      const snapped = snapWindowByVisual(logical, visualRect, display.bounds, true, EDGE_SNAP_PX);
+      placeLogical(snapped.x, snapped.y);
+      return;
     }
-    applyWindowChrome();
+    placeLogical(logical.x, logical.y);
   });
 
   ipcMain.on("nori:hover-opaque", (_event, opaque: boolean) => {

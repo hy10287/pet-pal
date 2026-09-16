@@ -5,6 +5,7 @@ import {
   fileUrlIfExists,
   loadAppConfig,
   loadMotionCatalog,
+  resolveLive2DModelFile,
   resolveRepoPath,
 } from "./config";
 import type { BootstrapPayload } from "../shared/types";
@@ -32,7 +33,7 @@ function resolveCubismFile(root: string, configuredPath: string): string {
 function bootstrap(): BootstrapPayload {
   const { config } = loadAppConfig(ROOT);
   const cubism = resolveCubismFile(ROOT, config.cubismCorePath);
-  const model = resolveRepoPath(ROOT, config.modelPath);
+  const model = resolveLive2DModelFile(ROOT, config.modelPath);
   const motions = resolveRepoPath(ROOT, config.motionsDir);
   return {
     config,

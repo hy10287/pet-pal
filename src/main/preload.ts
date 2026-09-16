@@ -23,6 +23,8 @@ export interface NoriBridge {
   dragStart: () => void;
   dragMove: () => void;
   dragEnd: () => void;
+  reportVisualRect: (rect: { x: number; y: number; width: number; height: number }) => void;
+  onPlaceShift: (handler: (shift: { x: number; y: number }) => void) => () => void;
   setClickThrough: (on: boolean) => Promise<void>;
   setHoverOpaque: (opaque: boolean) => void;
   setMenuOpen: (open: boolean, menuHeight?: number) => void;
@@ -43,6 +45,12 @@ const bridge: NoriBridge = {
   dragStart: () => ipcRenderer.send("nori:drag-start"),
   dragMove: () => ipcRenderer.send("nori:drag-move"),
   dragEnd: () => ipcRenderer.send("nori:drag-end"),
+  reportVisualRect: (rect) => ipcRenderer.send("nori:visual-rect", rect),
+  onPlaceShift: (handler) => {
+    const listener = (_event: unknown, shift: { x: number; y: number }) => handler(shift);
+    ipcRenderer.on("nori:place-shift", listener);
+    return () => ipcRenderer.removeListener("nori:place-shift", listener);
+  },
   setClickThrough: (on) => ipcRenderer.invoke("nori:click-through", on),
   setHoverOpaque: (opaque) => ipcRenderer.send("nori:hover-opaque", opaque),
   setMenuOpen: (open, menuHeight) => ipcRenderer.send("nori:menu-open", open, menuHeight),

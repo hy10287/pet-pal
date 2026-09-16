@@ -28,6 +28,7 @@ import { hudSnapshot, renderHud } from "./hud";
 import { loadCubismCore, loadLive2DModel } from "./live2d-actor";
 import { SCALE_MAX, SCALE_MIN, bindContextMenu, bodyMotionsForMenu } from "./menu";
 import { croppedWindowSize, displayWindowSize } from "../shared/display-preset";
+import { clampPlaceShift, visualPadding } from "../shared/edge-place";
 import { faceSafeRect } from "../shared/ui-chrome";
 
 const HOVER_DWELL_MS = 1200;
@@ -84,7 +85,15 @@ async function main(): Promise<void> {
       app.renderer.resize(size.width, size.height);
     }
     actor.layout(size.width, size.height);
+    bridge.reportVisualRect?.(actor.visualRect());
   };
+
+  const applyPlaceShift = (raw: { x: number; y: number }) => {
+    const size = croppedWindowSize(fullWindow, displayPreset);
+    const next = clampPlaceShift(raw, visualPadding(size, actor.visualRect()));
+    actor.setPlaceShift(next.x, next.y);
+  };
+  bridge.onPlaceShift?.(applyPlaceShift);
 
   app.stage.addChild(actor.view);
   actor.setBaseline(fullWindow.width, fullWindow.height);
@@ -145,6 +154,7 @@ async function main(): Promise<void> {
   let lastClickAt = 0;
   let lastHud = "";
   let saveScaleTimer: number | undefined;
+  let lastVisualKey = "";
 
   const hudState = () => director.debug(scale, clickThrough, actor.kind, actor.lastMotionSource());
   const syncHud = (force = false) => {
@@ -159,6 +169,7 @@ async function main(): Promise<void> {
     if (clamped === scale && persist) return;
     scale = clamped;
     actor.setScale(scale);
+    bridge.reportVisualRect?.(actor.visualRect());
     syncHud(true);
     if (!persist) return;
     window.clearTimeout(saveScaleTimer);
@@ -435,6 +446,12 @@ async function main(): Promise<void> {
   app.ticker.add(() => {
     const dt = app.ticker.deltaMS / 1000;
     const now = performance.now();
+    const visual = actor.visualRect();
+    const visualKey = `${Math.round(visual.x)},${Math.round(visual.y)},${Math.round(visual.width)},${Math.round(visual.height)}`;
+    if (visualKey !== lastVisualKey) {
+      lastVisualKey = visualKey;
+      bridge.reportVisualRect?.(visual);
+    }
     if (clickThrough && now - cursorPollAt > 32) {
       cursorPollAt = now;
       void bridge.getCursorLocal().then((cursor) => {

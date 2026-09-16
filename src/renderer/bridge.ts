@@ -47,6 +47,8 @@ export function createWebBridge(): NoriBridge {
     dragStart: () => undefined,
     dragMove: () => undefined,
     dragEnd: () => undefined,
+    reportVisualRect: () => undefined,
+    onPlaceShift: () => () => undefined,
     setClickThrough: async () => undefined,
     setHoverOpaque: () => undefined,
     setMenuOpen: () => undefined,

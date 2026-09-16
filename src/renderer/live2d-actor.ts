@@ -9,10 +9,19 @@ import type { PetActor } from "./actor";
 import { lockFullBodyFitted, MODEL_ANCHOR_Y, bottomPinHome } from "./display-crop";
 import { visualScale } from "./fit-scale";
 import { pickMotionUrls } from "./motion-url";
+import {
+  canvasRectToLocal,
+  unionDrawableCanvasRect,
+  worldRectFromBottomCenter,
+  type Rect,
+} from "./visual-bounds";
 
 type CoreModel = {
   setParameterValueById?: (id: string, value: number, weight?: number) => void;
   addParameterValueById?: (id: string, value: number, weight?: number) => void;
+  getDrawableCount?: () => number;
+  getDrawableOpacity?: (index: number) => number;
+  getDrawableDynamicFlagIsVisible?: (index: number) => boolean;
 };
 
 type MotionLike = {
@@ -34,6 +43,12 @@ type Live2DLike = Container & {
   internalModel?: {
     coreModel?: CoreModel;
     motionManager?: MotionManagerLike;
+    width?: number;
+    height?: number;
+    originalWidth?: number;
+    originalHeight?: number;
+    getDrawableIDs?: () => string[];
+    getDrawableBounds?: (index: number, bounds?: Rect) => Rect;
   };
   hitTest?: (x: number, y: number) => string[] | false;
   anchor?: { set: (x: number, y: number) => void };
@@ -41,6 +56,7 @@ type Live2DLike = Container & {
   position: { set: (x: number, y: number) => void };
   getLocalBounds?: () => { width: number; height: number };
   getBounds?: () => { x: number; y: number; width: number; height: number };
+  toGlobal?: (pos: { x: number; y: number }) => { x: number; y: number };
 };
 
 const POOL_GROUP = "nori_body";
@@ -59,6 +75,11 @@ export class Live2DActor implements PetActor {
   private playGen = 0;
   private motionUntil = 0;
   private motionSource: "file" | "params" = "params";
+  private placeShift = { x: 0, y: 0 };
+  private measuredFromDrawables = false;
+  private drawableLocal: Rect | null = null;
+  private canvasSize = { width: 0, height: 0 };
+  private restVisual: Rect = { x: 0, y: 0, width: 0, height: 0 };
 
   constructor(
     private readonly model: Live2DLike,
@@ -86,6 +107,17 @@ export class Live2DActor implements PetActor {
     this.viewSize = { width, height };
     this.ensureMeasured();
     this.applyLayout();
+  }
+
+  setPlaceShift(x: number, y: number): void {
+    this.placeShift = { x, y };
+    if (this.viewSize.width <= 0) return;
+    this.model.position.set(this.home.x + x, this.home.y + y);
+  }
+
+  visualRect(): Rect {
+    if (this.restVisual.width > 0 && this.restVisual.height > 0) return this.restVisual;
+    return { x: 0, y: 0, width: this.viewSize.width, height: this.viewSize.height };
   }
 
   hitTest(x: number, y: number): HitZone {
@@ -151,6 +183,11 @@ export class Live2DActor implements PetActor {
     motion: { nod: number; tilt: number; bounce: number; sway: number; sparkle: number },
   ): void {
     const core = this.model.internalModel?.coreModel;
+    const hadDrawables = this.measuredFromDrawables;
+    this.ensureMeasured();
+    if (this.measuredFromDrawables && !hadDrawables) {
+      this.applyLayout();
+    }
     if (!core) return;
 
     const fileMotion = this.isPlayingMotion() && this.motionSource === "file";
@@ -182,14 +219,14 @@ export class Live2DActor implements PetActor {
       set("ParamAngleY", look.angleY + (params.ParamAngleY ?? 0) + motion.nod * 0.55);
       set("ParamAngleZ", look.angleZ + (params.ParamAngleZ ?? 0) + motion.tilt * 0.55);
       set("ParamBodyAngleX", look.bodyX + motion.sway * 0.18);
-      this.model.position.set(this.home.x, this.home.y - motion.bounce * 0.1);
+      this.model.position.set(this.home.x + this.placeShift.x, this.home.y - motion.bounce * 0.1 + this.placeShift.y);
       return;
     }
 
     // Body .motion3 owns pose/angles. Only overlay eyes — no ADD on head/body (that twitches).
     add("ParamEyeBallX", look.eyeX * 0.22);
     add("ParamEyeBallY", look.eyeY * 0.22);
-    this.model.position.set(this.home.x, this.home.y);
+    this.model.position.set(this.home.x + this.placeShift.x, this.home.y + this.placeShift.y);
   }
 
   private applyLayout(): void {
@@ -208,9 +245,43 @@ export class Live2DActor implements PetActor {
     if (width <= 0) return;
     this.home = bottomPinHome(width, height, this.scaleValue, this.baseline.height);
     this.model.position.set(this.home.x, this.home.y);
+    this.restVisual = this.measureWorldVisual(visualScale(fitted, this.scaleValue));
+    this.model.position.set(this.home.x + this.placeShift.x, this.home.y + this.placeShift.y);
+  }
+
+  private measureWorldVisual(scale: number): Rect {
+    const local = this.drawableLocal;
+    const canvasW = this.canvasSize.width || this.natural.width;
+    const canvasH = this.canvasSize.height || this.natural.height;
+    if (local && canvasW > 0 && canvasH > 0) {
+      return worldRectFromBottomCenter(this.home, scale, local, { width: canvasW, height: canvasH });
+    }
+    const world = this.model.getBounds?.();
+    if (world && world.width >= 8 && world.height >= 8) {
+      return { x: world.x, y: world.y, width: world.width, height: world.height };
+    }
+    return { x: 0, y: 0, width: this.viewSize.width, height: this.viewSize.height };
   }
 
   private ensureMeasured(): void {
+    const internal = this.model.internalModel;
+    if (internal) {
+      this.canvasSize = {
+        width: internal.width || internal.originalWidth || this.canvasSize.width,
+        height: internal.height || internal.originalHeight || this.canvasSize.height,
+      };
+    }
+    const drawable = unionDrawableCanvasRect(internal);
+    if (drawable) {
+      const local = canvasRectToLocal(internal ?? {}, drawable);
+      const upgraded = !this.measuredFromDrawables;
+      this.drawableLocal = local;
+      this.natural = { width: local.width, height: local.height };
+      this.measured = true;
+      this.measuredFromDrawables = true;
+      if (upgraded) this.fitted = null;
+      return;
+    }
     if (this.measured) return;
     const prevX = this.model.scale?.x ?? 1;
     const prevY = this.model.scale?.y ?? 1;
@@ -223,6 +294,8 @@ export class Live2DActor implements PetActor {
     this.model.scale?.set(prevX, prevY);
     if (w < 8 || h < 8) return;
     this.natural = { width: w, height: h };
+    this.canvasSize = { width: w, height: h };
+    this.drawableLocal = { x: 0, y: 0, width: w, height: h };
     this.measured = true;
   }
 
