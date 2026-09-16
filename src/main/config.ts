@@ -33,10 +33,14 @@ export function loadJson(path: string): unknown {
 function mergeConfig(raw: unknown): AppConfig {
   const data = (raw ?? {}) as Partial<AppConfig>;
   const port = parseControlPort(data.agentControlPort, DEFAULT_AGENT_CONTROL_PORT);
+  // 只有缺少 displayPreset 的旧配置才需要从"看起来像裁切高度"的值里恢复全身基线
+  const legacyNoPreset = typeof data.displayPreset !== "string";
   return {
     ...DEFAULT_CONFIG,
     ...data,
-    window: resolveFullWindow({ ...DEFAULT_CONFIG.window, ...(data.window ?? {}) }),
+    window: legacyNoPreset
+      ? resolveFullWindow({ ...DEFAULT_CONFIG.window, ...(data.window ?? {}) })
+      : { ...DEFAULT_CONFIG.window, ...(data.window ?? {}) },
     scale: clampUserScale(Number(data.scale) || 1),
     displayPreset: parseDisplayPreset(data.displayPreset),
     edgeSnap: data.edgeSnap === true,

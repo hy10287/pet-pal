@@ -9,6 +9,13 @@ import {
 } from "./config";
 import type { BootstrapPayload } from "../shared/types";
 
+process.on("uncaughtException", (error) => {
+  console.error("[nori] uncaught exception:", error);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[nori] unhandled rejection:", reason);
+});
+
 const ROOT = join(__dirname, "../..");
 const DIST = join(__dirname, "..");
 const PORT = Number(process.env.NORI_PREVIEW_PORT || 43187);

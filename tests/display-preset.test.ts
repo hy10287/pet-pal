@@ -89,7 +89,7 @@ describe("displayWindowSize", () => {
   });
 
   it("does not grow a side strip while the right-click menu is open", () => {
-    const open = displayWindowSize(FULL, "compact", { menuOpen: true, menuHeight: 420 });
+    const open = displayWindowSize(FULL, "compact", { menuOpen: true });
     expect(open).toEqual(croppedWindowSize(FULL, "compact"));
     expect(displayWindowSize(FULL, "compact", { menuOpen: false })).toEqual(open);
     expect(open.width).toBe(FULL.width);
@@ -102,7 +102,7 @@ describe("displayWindowSize", () => {
   });
 
   it("never grows past the crop, even with a tall menu measurement", () => {
-    const open = displayWindowSize(FULL, "compact", { menuOpen: true, menuHeight: 900 });
+    const open = displayWindowSize(FULL, "compact", { menuOpen: true });
     expect(open).toEqual(croppedWindowSize(FULL, "compact"));
   });
 });

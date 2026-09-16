@@ -34,7 +34,6 @@ export function createWebBridge(): NoriBridge {
         height,
         hudOn: Boolean(state.hudOn),
         menuOpen: Boolean(state.menuOpen),
-        menuHeight: state.menuHeight,
       };
     },
     setDisplayPreset: async (preset: DisplayPresetId) => {
@@ -49,7 +48,13 @@ export function createWebBridge(): NoriBridge {
     dragEnd: () => undefined,
     setClickThrough: async () => undefined,
     setHoverOpaque: () => undefined,
-    setMenuOpen: () => undefined,
+    setMenuOpen: async () => ({
+      menuOpen: false,
+      side: "right" as const,
+      width: 420,
+      height: 246,
+      stage: { width: 420, height: 246 },
+    }),
     getCursorLocal: async () => null,
     quit: () => undefined,
     onCommand: () => () => undefined,

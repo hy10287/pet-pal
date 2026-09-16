@@ -30,14 +30,9 @@ export function clampUserScale(value: number): number {
   return Math.max(USER_SCALE_MIN, Math.min(USER_SCALE_MAX, value));
 }
 
-/** Settings popup panel width. Overlay inside the crop — never extra window chrome. */
-export const SETTINGS_POPUP_WIDTH = 240;
-
 export interface WindowChromeState {
   hudOn?: boolean;
   menuOpen?: boolean;
-  /** Ignored for sizing. Kept for older callers. */
-  menuHeight?: number;
 }
 
 export function parseDisplayPreset(value: unknown): DisplayPresetId {

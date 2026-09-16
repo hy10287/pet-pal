@@ -1,11 +1,9 @@
 import type { CatalogItem, DisplayPresetId } from "../shared/types";
 import { DISPLAY_PRESETS, USER_SCALE_MAX, USER_SCALE_MIN } from "../shared/display-preset";
-import { faceSafeRect, placePopupAwayFromFace, type Rect } from "../shared/ui-chrome";
 
 export interface MenuHooks {
-  onOpen?: (info?: { menuHeight: number; clientX: number; clientY: number }) => void;
+  onOpen?: () => void;
   onClose?: () => void;
-  faceRect?: () => Rect;
 }
 
 export type MenuCommand =
@@ -118,37 +116,24 @@ export function bindContextMenu(
     hooks.onClose?.();
   };
 
-  const place = () => {
-    const rect = menu.getBoundingClientRect();
-    const viewport = stageViewport();
-    const face = hooks.faceRect?.() ?? faceSafeRect(viewport);
-    const pos = placePopupAwayFromFace(face, { width: rect.width, height: rect.height }, viewport);
-    menu.style.left = `${pos.x}px`;
-    menu.style.top = `${pos.y}px`;
-  };
-
-  const show = (clientX = 0, clientY = 0) => {
+  const show = () => {
     open = true;
     openedAt = performance.now();
     renderMenu(menu, hooks.getState(), onCommand, hide);
     menu.hidden = false;
-    hooks.onOpen?.({ menuHeight: 0, clientX, clientY });
-    requestAnimationFrame(() => {
-      place();
-      requestAnimationFrame(place);
-    });
+    hooks.onOpen?.();
   };
 
-  const toggle = (clientX: number, clientY: number) => {
+  const toggle = () => {
     if (open) hide();
-    else show(clientX, clientY);
+    else show();
   };
 
   root.addEventListener("contextmenu", (event) => {
     event.preventDefault();
     event.stopPropagation();
     if (menu.contains(event.target as Node)) return;
-    toggle(event.clientX, event.clientY);
+    toggle();
   });
 
   window.addEventListener("keydown", (event) => {
@@ -294,12 +279,16 @@ export function renderMenu(
     snapBtn.textContent = next ? "贴边吸附：开" : "贴边吸附：关";
   });
   snapBtn.dataset.edgeSnap = "1";
+  const hudBtn = actionButton(state.hudOn ? "隐藏调试 HUD" : "显示调试 HUD", () => {
+    onCommand({ type: "toggle-hud" });
+    const next = !state.hudOn;
+    state.hudOn = next;
+    hudBtn.textContent = next ? "隐藏调试 HUD" : "显示调试 HUD";
+  });
   menu.append(
     section("系统", [
       snapBtn,
-      actionButton(state.hudOn ? "隐藏调试 HUD" : "显示调试 HUD", () => {
-        onCommand({ type: "toggle-hud" });
-      }),
+      hudBtn,
       actionButton(state.clickThrough ? "关闭鼠标穿透" : "打开鼠标穿透", () => {
         hide();
         onCommand({ type: "toggle-click-through" });

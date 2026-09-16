@@ -51,6 +51,7 @@ function parseItem(raw: unknown, index: number): CatalogItem {
     eventOnly: Boolean(item.eventOnly),
     weight: Number.isFinite(Number(item.weight)) ? Number(item.weight) : 1,
     duration: Number.isFinite(Number(item.duration)) ? Number(item.duration) : 2.4,
+    // 保留字段（schema v1 约定），当前播放链路未使用；实现循环播放前不要删除解析。
     loop: Boolean(item.loop),
     tags: asStringArray(item.tags),
   };

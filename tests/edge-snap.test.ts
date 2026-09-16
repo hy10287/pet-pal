@@ -34,4 +34,9 @@ describe("snapRectToEdges", () => {
     const draggedAway = snapRectToEdges({ x: 24, y: 30, ...pet }, area, true);
     expect(draggedAway).toEqual({ x: 24, y: 30, ...pet });
   });
+
+  it("does not pull a half-off-screen pet back onto the work area", () => {
+    const rect = { x: -200, y: 100, ...pet };
+    expect(snapRectToEdges(rect, area, true)).toEqual(rect);
+  });
 });

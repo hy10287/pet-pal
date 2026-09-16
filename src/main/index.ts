@@ -1,4 +1,4 @@
-import { BrowserWindow, app, ipcMain, screen } from "electron";
+import { app, BrowserWindow, ipcMain, screen, type Tray } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { AppConfig, BootstrapPayload, DisplayPresetId } from "../shared/types";
@@ -7,8 +7,9 @@ import {
   type AgentPlayedSummary,
   isAgentControlEnabled,
 } from "../shared/agent-control";
-import { displayWindowSize, parseDisplayPreset, resolveFullWindow } from "../shared/display-preset";
+import { displayWindowSize, parseDisplayPreset, resolveFullWindow, croppedWindowSize } from "../shared/display-preset";
 import { EDGE_SNAP_PX, snapRectToEdges } from "../shared/edge-snap";
+import { popupWindowBounds, type PopupSide } from "../shared/ui-chrome";
 import {
   fileUrlIfExists,
   loadAppConfig,
@@ -21,6 +22,13 @@ import { startAgentControlServer, type AgentControlHandle, newIntentRequestId } 
 import { applyClickThrough, commitPetWindowSize, createPetWindow, preloadPath, rendererHtml } from "./window";
 import { createTray } from "./tray";
 import { applyLockedSize, movedBounds, placeAt, sameSize } from "./window-move";
+
+process.on("uncaughtException", (error) => {
+  console.error("[nori] uncaught exception:", error);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[nori] unhandled rejection:", reason);
+});
 
 const ROOT = join(__dirname, "../..");
 const preview = process.argv.includes("--preview");
@@ -36,8 +44,12 @@ if (process.platform === "linux") {
 let configState = loadAppConfig(ROOT);
 let persistPath = join(ROOT, "config", "local.json");
 let agentControl: AgentControlHandle | null = null;
+let tray: Tray | null = null;
 
-const pendingIntents = new Map<string, (played?: AgentPlayedSummary) => void>();
+const pendingIntents = new Map<
+  string,
+  { resolve: (played?: AgentPlayedSummary) => void; reject: (error: Error) => void }
+>();
 
 function sendCommand(command: string | { type: "intent"; requestId: string } & AgentControlRequest): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -52,15 +64,18 @@ function forwardAgentIntent(req: AgentControlRequest): Promise<AgentPlayedSummar
     return Promise.reject(new Error("renderer not ready"));
   }
   const requestId = newIntentRequestId();
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       pendingIntents.delete(requestId);
-      resolve(undefined);
+      reject(new Error("renderer timeout"));
     }, 4000);
-    pendingIntents.set(requestId, (played) => {
-      clearTimeout(timer);
-      pendingIntents.delete(requestId);
-      resolve(played);
+    pendingIntents.set(requestId, {
+      resolve: (played) => {
+        clearTimeout(timer);
+        pendingIntents.delete(requestId);
+        resolve(played);
+      },
+      reject,
     });
     sendCommand({ type: "intent", requestId, ...req });
   });
@@ -118,10 +133,11 @@ app.whenReady().then(() => {
   let applyingPreset = false;
   let applyGen = 0;
   let menuOpen = false;
-  let menuHeight = 0;
   let hudOn = false;
   let dragging = false;
   let dragOffset = { x: 0, y: 0 };
+  let popupSide: PopupSide = "right";
+  let stageBoundsBeforePopup: Electron.Rectangle | null = null;
 
   const beginApply = () => {
     applyingPreset = true;
@@ -135,16 +151,25 @@ app.whenReady().then(() => {
 
   const applyWindowChrome = () => {
     if (win.isDestroyed() || dragging) return;
-    const size = displayWindowSize(fullWindow, parseDisplayPreset(configState.config.displayPreset), {
-      hudOn,
-      menuOpen,
-      menuHeight,
-    });
+    const crop = croppedWindowSize(fullWindow, parseDisplayPreset(configState.config.displayPreset));
+    let size = { width: crop.width, height: crop.height };
+    let position: { x: number; y: number } | undefined;
+    if (menuOpen) {
+      const base = stageBoundsBeforePopup ?? { ...win.getBounds(), width: crop.width, height: crop.height };
+      const stage = { ...base, width: crop.width, height: crop.height };
+      stageBoundsBeforePopup = stage;
+      const { bounds, side } = popupWindowBounds(stage, screen.getDisplayMatching(stage).workArea);
+      size = { width: bounds.width, height: bounds.height };
+      position = { x: bounds.x, y: bounds.y };
+      popupSide = side;
+    } else if (stageBoundsBeforePopup) {
+      position = { x: stageBoundsBeforePopup.x, y: stageBoundsBeforePopup.y };
+      stageBoundsBeforePopup = null;
+    }
     lockedSize.width = size.width;
     lockedSize.height = size.height;
-    const next = applyLockedSize(win.getBounds(), lockedSize);
     const end = beginApply();
-    commitPetWindowSize(win, lockedSize, next);
+    commitPetWindowSize(win, lockedSize, position);
     end();
   };
 
@@ -172,7 +197,7 @@ app.whenReady().then(() => {
     }
   });
 
-  createTray(ROOT, {
+  tray = createTray(ROOT, {
     idle: () => sendCommand("idle"),
     random: () => sendCommand("random"),
     toggleHud: () => sendCommand("toggle-hud"),
@@ -204,12 +229,11 @@ app.whenReady().then(() => {
 
   ipcMain.handle(
     "nori:set-ui-chrome",
-    (_event, state: { hudOn?: boolean; menuOpen?: boolean; menuHeight?: number }) => {
+    (_event, state: { hudOn?: boolean; menuOpen?: boolean }) => {
       if (typeof state?.hudOn === "boolean") hudOn = state.hudOn;
       if (typeof state?.menuOpen === "boolean") menuOpen = state.menuOpen;
-      if (typeof state?.menuHeight === "number" && state.menuHeight > 0) menuHeight = state.menuHeight;
       applyWindowChrome();
-      return { ...lockedSize, hudOn, menuOpen, menuHeight };
+      return { ...lockedSize, hudOn, menuOpen };
     },
   );
 
@@ -272,12 +296,18 @@ app.whenReady().then(() => {
     applyClickThrough(win, !opaque);
   });
 
-  ipcMain.on("nori:menu-open", (_event, open: boolean, height?: number) => {
+  ipcMain.handle("nori:menu-open", (_e, open: boolean) => {
     menuOpen = Boolean(open);
-    if (typeof height === "number" && height > 0) menuHeight = height;
-    if (!menuOpen) menuHeight = 0;
     restoreClickThrough();
     applyWindowChrome();
+    const crop = croppedWindowSize(fullWindow, parseDisplayPreset(configState.config.displayPreset));
+    return {
+      menuOpen,
+      side: popupSide,
+      width: lockedSize.width,
+      height: lockedSize.height,
+      stage: { width: crop.width, height: crop.height },
+    };
   });
 
   ipcMain.handle("nori:cursor-local", () => {
@@ -299,7 +329,7 @@ app.whenReady().then(() => {
   ipcMain.on("nori:quit", () => app.quit());
 
   ipcMain.on("nori:intent-result", (_event, requestId: string, played: AgentPlayedSummary) => {
-    pendingIntents.get(requestId)?.(played);
+    pendingIntents.get(requestId)?.resolve(played);
   });
 
   if (isAgentControlEnabled()) {
@@ -320,6 +350,8 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
+  tray?.destroy();
+  tray = null;
   const handle = agentControl;
   agentControl = null;
   if (handle) void handle.close();

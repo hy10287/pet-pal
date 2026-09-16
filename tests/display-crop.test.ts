@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { applyStageCrop, bottomPinFromLocalBottom, bottomPinHome } from "../src/renderer/display-crop";
-import { DEFAULT_FULL_WINDOW } from "../src/shared/display-preset";
+import { applyStageCrop, pinnedTopY } from "../src/renderer/display-crop";
+import { fitScale, visualScale } from "../src/renderer/fit-scale";
+import { DEFAULT_FULL_WINDOW, windowHeightForPreset } from "../src/shared/display-preset";
+import type { DisplayPresetId } from "../src/shared/types";
 
 describe("applyStageCrop", () => {
   it("locks #stage to the crop so a taller chrome window cannot stretch it", () => {
@@ -16,34 +18,49 @@ describe("applyStageCrop", () => {
   });
 });
 
-describe("bottomPinHome", () => {
-  it("pins the full-body floor to the window bottom so scale grows upward", () => {
-    expect(bottomPinHome(420, 560, 1, 560)).toEqual({ x: 210, y: 560 });
-    expect(bottomPinHome(420, 560, 1.8, 560).y).toBe(560);
-    expect(bottomPinHome(420, 560, 0.6, 560).y).toBe(560);
+describe("pinnedTopY", () => {
+  it("pins the top edge to the window top when the sprite is taller than the crop", () => {
+    expect(pinnedTopY(560, 246)).toBe(0);
+    expect(pinnedTopY(1008, 246)).toBe(0);
   });
 
-  it("keeps the crop's bottom edge as the scale origin", () => {
-    const cropH = 179;
-    const fullH = 560;
-    expect(bottomPinHome(420, cropH, 1, fullH).y).toBe(fullH);
-    const grown = bottomPinHome(420, cropH, 1.8, fullH);
-    expect(grown.y).toBe(cropH + (fullH - cropH) * 1.8);
-    expect(grown.y - cropH).toBeCloseTo((fullH - cropH) * 1.8);
+  it("centers the sprite when it fits inside the crop", () => {
+    expect(pinnedTopY(210, 560)).toBe(175);
+    expect(pinnedTopY(179, 179)).toBe(0);
   });
 
-  it("clamps the slider so pin math matches visualScale", () => {
-    expect(bottomPinHome(420, 179, 9, 560).y).toBe(bottomPinHome(420, 179, 1.8, 560).y);
-    expect(bottomPinHome(420, 179, 0.1, 560).y).toBe(bottomPinHome(420, 179, 0.6, 560).y);
+  it("keeps the sprite visible for every preset and user scale", () => {
+    const presets: DisplayPresetId[] = ["compact", "balanced", "standard", "full"];
+    const scales = [0.6, 1, 1.2, 1.8];
+    const naturals: Array<[number, number]> = [
+      [1000, 2000],
+      [2000, 1000],
+      [1200, 1300],
+    ];
+    for (const preset of presets) {
+      const cropH = windowHeightForPreset(DEFAULT_FULL_WINDOW.height, preset);
+      for (const s of scales) {
+        for (const [w, h] of naturals) {
+          const fitted = fitScale(w, h, 420, 560);
+          const vis = visualScale(fitted, s);
+          const boxHeight = h * vis;
+          const top = pinnedTopY(boxHeight, cropH);
+          const bottom = top + boxHeight;
+          expect(top).toBeGreaterThanOrEqual(0);
+          expect(bottom).toBeGreaterThan(0);
+          expect(Math.min(top, cropH)).toBeLessThan(cropH);
+        }
+      }
+    }
   });
-});
 
-describe("bottomPinFromLocalBottom", () => {
-  it("maps the fallback local bottom onto the same floor", () => {
-    const localBottom = 170;
-    const at1 = bottomPinFromLocalBottom(420, 560, localBottom, 1, 1, 560);
-    expect(at1.y + localBottom).toBe(560);
-    const grown = bottomPinFromLocalBottom(420, 560, localBottom, 1, 1.5, 560);
-    expect(grown.y + localBottom * 1.5).toBe(560);
+  it("keeps the x anchor at the horizontal center", () => {
+    const width = 420;
+    const cropH = 246;
+    const boxHeight = 560;
+    const top = pinnedTopY(boxHeight, cropH);
+    const home = { x: width / 2, y: top + boxHeight };
+    expect(home.x).toBe(210);
+    expect(top).toBe(0);
   });
 });

@@ -145,6 +145,38 @@ export function isLoopbackRemoteAddress(address?: string | null): boolean {
   return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
 }
 
+/** 浏览器跨站攻击面（WebSocket 不受 CORS 约束），必须白名单。 */
+export function isAllowedOrigin(origin?: string | string[]): boolean {
+  const raw = Array.isArray(origin) ? origin[0] : origin;
+  if (raw == null) return true;
+  const value = String(raw).trim();
+  if (value === "") return true;
+  const lower = value.toLowerCase();
+  if (lower === "null") return true;
+  if (lower.startsWith("file://")) return true;
+  try {
+    const url = new URL(value);
+    const proto = url.protocol.toLowerCase();
+    const host = url.hostname.toLowerCase();
+    if (proto !== "http:" && proto !== "https:") return false;
+    return host === "127.0.0.1" || host === "localhost";
+  } catch {
+    return false;
+  }
+}
+
+/** NORI_CONTROL_TOKEN 未设置或为空 => 恒 true；否则 header 或 query 之一严格相等才 true。 */
+export function hasValidControlToken(
+  headerValue: string | string[] | undefined,
+  queryValue: string | null,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const expected = env.NORI_CONTROL_TOKEN;
+  if (expected == null || String(expected) === "") return true;
+  const header = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+  return header === expected || queryValue === expected;
+}
+
 export function intentFromAgentRequest(req: AgentControlRequest): EmotionIntent {
   const variant = req.variant || req.motionHint;
   return {

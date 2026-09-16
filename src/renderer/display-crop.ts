@@ -8,7 +8,6 @@ import {
   croppedWindowSize,
   displayWindowSize,
   resolveFullWindow,
-  clampUserScale,
 } from "../shared/display-preset";
 import { fitScale, lockFitted } from "./fit-scale";
 
@@ -50,42 +49,11 @@ export function lockFullBodyFitted(
   return lockFitted(current, naturalWidth, naturalHeight, fullWidth, fullHeight);
 }
 
-/**
- * Bottom-center home for a sprite whose PIXI anchor is (0.5, 1).
- * At scale 1 the feet sit on the full-body floor (`fullHeight`).
- * The visible crop's bottom edge is the scale origin, so enlarging grows
- * upward instead of leaving a gap under the character.
- */
-export function bottomPinHome(
-  viewWidth: number,
-  viewHeight: number,
-  userScale: number,
-  fullHeight: number,
-): { x: number; y: number } {
-  const scale = clampUserScale(userScale);
-  const cropH = viewHeight > 0 ? viewHeight : fullHeight;
-  const baseH = Number.isFinite(fullHeight) && fullHeight > 0 ? fullHeight : cropH;
-  return {
-    x: viewWidth / 2,
-    y: cropH + Math.max(0, baseH - cropH) * scale,
-  };
-}
-
-/** Fallback actor: origin is not the Cubism anchor; pin by local bottom Y. */
-export function bottomPinFromLocalBottom(
-  viewWidth: number,
-  viewHeight: number,
-  localBottom: number,
-  fitted: number,
-  userScale: number,
-  fullHeight: number,
-): { x: number; y: number } {
-  const vis = (fitted > 0 ? fitted : 1) * clampUserScale(userScale);
-  const floor = bottomPinHome(viewWidth, viewHeight, userScale, fullHeight).y;
-  return {
-    x: viewWidth / 2,
-    y: floor - localBottom * vis,
-  };
+/** 精灵盒高度小于窗口时居中，否则贴顶（保证头永远不出框）。返回盒子顶边的屏幕 y。 */
+export function pinnedTopY(boxHeight: number, cropHeight: number): number {
+  const crop = cropHeight > 0 ? cropHeight : boxHeight;
+  if (boxHeight >= crop) return 0;
+  return (crop - boxHeight) / 2;
 }
 
 /** Lock #stage to the crop so a taller HUD/menu window cannot stretch the character view. */
