@@ -175,7 +175,7 @@ export function summarizePlayed(
     source: pair.source,
   };
   if (pair.intent.variant) summary.variant = pair.intent.variant;
-  if (say?.trim()) summary.sayDeferred = true;
+  summary.sayDeferred = false;
   return summary;
 }
 

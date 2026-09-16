@@ -335,7 +335,10 @@ async function main(): Promise<void> {
     if (isAgentIntentCommand(command)) {
       const pair = beginPlay(intentFromAgentRequest(command), "agent");
       if (command.say) {
-        console.info("[nori] agent say (chat UI deferred):", command.say);
+        tipController.push(
+          { text: command.say, priority: 10, timeoutMs: 6000, passive: false },
+          currentVars(),
+        );
       }
       bridge.reportIntent(command.requestId, summarizePlayed(pair, command.say));
       return;

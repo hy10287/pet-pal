@@ -38,7 +38,7 @@ curl -sS -X POST http://127.0.0.1:3927/intent \
   -d '{"emotion":"happy","intensity":0.7,"motionHint":"smile","say":"hello"}'
 ```
 
-成功：`{"ok":true,"played":{...}}`。`say` 目前只记日志（聊天气泡 UI 未做）。可选字段：`variant`、`source`。可选 WebSocket：`ws://127.0.0.1:3927/intent`，报文同 JSON。
+成功：`{"ok":true,"played":{...}}`。`say` 会显示在桌宠气泡里（≤2000 字符）。可选字段：`variant`、`source`。可选 WebSocket：`ws://127.0.0.1:3927/intent`，报文同 JSON。
 
 ## 放置 Cubism Core（不随仓库分发）
 
