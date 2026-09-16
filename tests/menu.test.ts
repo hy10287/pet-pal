@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { overlayViewport, shouldDismissMenu } from "../src/renderer/menu";
 
 describe("shouldDismissMenu", () => {
@@ -28,5 +30,15 @@ describe("overlayViewport", () => {
       width: 420,
       height: 560,
     });
+  });
+});
+
+describe("system tools", () => {
+  it("adds capture and hide-for-day actions without closing the panel", () => {
+    const source = readFileSync(resolve(__dirname, "../src/renderer/menu.ts"), "utf8");
+    expect(source).toContain('actionButton("截图保存"');
+    expect(source).toContain('actionButton("隐藏 24 小时"');
+    expect(source).toContain('onCommand({ type: "capture" })');
+    expect(source).toContain('onCommand({ type: "hide-for-day" })');
   });
 });

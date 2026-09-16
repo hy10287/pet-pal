@@ -1,5 +1,5 @@
-import { BrowserWindow, app, ipcMain, screen } from "electron";
-import { existsSync } from "node:fs";
+import { BrowserWindow, app, dialog, ipcMain, screen } from "electron";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AppConfig, BootstrapPayload, DisplayPresetId } from "../shared/types";
 import {
@@ -19,11 +19,12 @@ import {
 } from "./config";
 import { startAgentControlServer, type AgentControlHandle, newIntentRequestId } from "./agent-control-server";
 import { applyClickThrough, commitPetWindowSize, createPetWindow, preloadPath, rendererHtml } from "./window";
-import { createTray } from "./tray";
+import { applyTrayMenu, createTray } from "./tray";
 import { applyLockedSize, movedBounds, placeAt, sameSize } from "./window-move";
 import { startIdleWatcher } from "./idle-watcher";
 import { getTips, loadTips, startTipsWatcher } from "./tips-store";
 import { startupGreeting } from "../tips/triggers";
+import { renderTemplate } from "../tips/message-center";
 
 const ROOT = join(__dirname, "../..");
 const preview = process.argv.includes("--preview");
@@ -40,6 +41,24 @@ let configState = loadAppConfig(ROOT);
 let persistPath = join(ROOT, "config", "local.json");
 let agentControl: AgentControlHandle | null = null;
 let stopTipsRuntime: (() => void) | null = null;
+
+function hiddenUntilPath(): string {
+  return join(app.getPath("userData"), "hidden-until.json");
+}
+
+function readHiddenUntil(): number {
+  try {
+    const raw = JSON.parse(readFileSync(hiddenUntilPath(), "utf8")) as { until?: unknown };
+    const until = Number(raw.until);
+    return Number.isFinite(until) ? until : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeHiddenUntil(until: number): void {
+  writeFileSync(hiddenUntilPath(), `${JSON.stringify({ until })}\n`, "utf8");
+}
 
 const pendingIntents = new Map<string, (played?: AgentPlayedSummary) => void>();
 
@@ -177,13 +196,63 @@ app.whenReady().then(() => {
     }
   });
 
-  createTray(ROOT, {
+  const sendCaptureTip = (ok: boolean) => {
+    if (win.isDestroyed()) return;
+    const key = ok ? "capture-ok" : "capture-fail";
+    const raw = getTips().reactions[key][0]?.text[0];
+    if (!raw) return;
+    win.webContents.send("nori:tip", {
+      text: renderTemplate(raw, tipVars()),
+      timeoutMs: 4000,
+      priority: 9,
+      passive: false,
+    });
+  };
+
+  const capturePet = async () => {
+    try {
+      const png = (await win.webContents.capturePage()).toPNG();
+      const pictures = app.getPath("pictures");
+      const result = await dialog.showSaveDialog(win, {
+        defaultPath: join(pictures, `nori-${Date.now()}.png`),
+      });
+      if (result.canceled || !result.filePath) return;
+      writeFileSync(result.filePath, png);
+      sendCaptureTip(true);
+    } catch {
+      sendCaptureTip(false);
+    }
+  };
+
+  const hideForDay = () => {
+    writeHiddenUntil(Date.now() + 86_400_000);
+    if (!win.isDestroyed()) win.hide();
+    applyTrayMenu(tray, trayActions, true);
+  };
+
+  const showPet = () => {
+    writeHiddenUntil(0);
+    if (!win.isDestroyed()) {
+      win.show();
+      win.moveTop();
+    }
+    applyTrayMenu(tray, trayActions, false);
+  };
+
+  const trayActions = {
     idle: () => sendCommand("idle"),
     random: () => sendCommand("random"),
     toggleHud: () => sendCommand("toggle-hud"),
     toggleClickThrough: () => sendCommand("toggle-click-through"),
     quit: () => app.quit(),
-  });
+    capture: () => {
+      void capturePet();
+    },
+    hideForDay,
+    showPet,
+  };
+
+  const tray = createTray(ROOT, trayActions, readHiddenUntil() > Date.now());
 
   const tipVars = (): Record<string, string> => {
     const now = new Date();
@@ -213,9 +282,16 @@ app.whenReady().then(() => {
       if (greet) win.webContents.send("nori:tip", greet);
     }, 300);
   });
+  win.on("ready-to-show", () => {
+    if (readHiddenUntil() > Date.now() && !win.isDestroyed()) win.hide();
+  });
 
   ipcMain.handle("nori:bootstrap", () => bootstrapPayload());
   ipcMain.handle("nori:tips:get", () => getTips());
+  ipcMain.handle("nori:capture", () => capturePet());
+  ipcMain.handle("nori:hide-for-day", () => {
+    hideForDay();
+  });
 
   ipcMain.handle("nori:save-config", (_event, patch: Partial<AppConfig>) => {
     const next = { ...configState.config, ...patch, window: fullWindow };

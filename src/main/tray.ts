@@ -8,19 +8,20 @@ export interface TrayActions {
   toggleHud: () => void;
   toggleClickThrough: () => void;
   quit: () => void;
+  capture: () => void;
+  hideForDay: () => void;
+  showPet: () => void;
 }
 
-export function createTray(root: string, actions: TrayActions): Tray {
-  const iconPath = join(root, "assets", "icon.png");
-  const image = existsSync(iconPath)
-    ? nativeImage.createFromPath(iconPath)
-    : nativeImage.createEmpty();
-  const tray = new Tray(image.isEmpty() ? nativeImage.createFromDataURL(FALLBACK_PNG) : image);
-  tray.setToolTip("Nori Desktop Pet");
+export function applyTrayMenu(tray: Tray, actions: TrayActions, canShow: boolean): void {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "待机 Idle", click: () => actions.idle() },
       { label: "随机情绪 Random", click: () => actions.random() },
+      { type: "separator" },
+      { label: "截图保存 PNG", click: () => actions.capture() },
+      { label: "隐藏桌宠(24h)", click: () => actions.hideForDay() },
+      { label: "显示桌宠", click: () => actions.showPet(), enabled: canShow },
       { type: "separator" },
       { label: "调试 HUD", click: () => actions.toggleHud() },
       { label: "鼠标穿透 Click-through", click: () => actions.toggleClickThrough() },
@@ -28,6 +29,16 @@ export function createTray(root: string, actions: TrayActions): Tray {
       { label: "退出 Quit", click: () => actions.quit() },
     ]),
   );
+}
+
+export function createTray(root: string, actions: TrayActions, canShow = false): Tray {
+  const iconPath = join(root, "assets", "icon.png");
+  const image = existsSync(iconPath)
+    ? nativeImage.createFromPath(iconPath)
+    : nativeImage.createEmpty();
+  const tray = new Tray(image.isEmpty() ? nativeImage.createFromDataURL(FALLBACK_PNG) : image);
+  tray.setToolTip("Nori Desktop Pet");
+  applyTrayMenu(tray, actions, canShow);
   return tray;
 }
 

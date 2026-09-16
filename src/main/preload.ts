@@ -35,6 +35,8 @@ export interface NoriBridge {
   getTips: () => Promise<TipsConfig>;
   onTipsChanged: (handler: (tips: TipsConfig) => void) => () => void;
   onTip: (handler: (msg: TipMessage) => void) => () => void;
+  capture: () => Promise<void>;
+  hideForDay: () => Promise<void>;
 }
 
 const bridge: NoriBridge = {
@@ -72,6 +74,8 @@ const bridge: NoriBridge = {
     ipcRenderer.on("nori:tip", listener);
     return () => ipcRenderer.removeListener("nori:tip", listener);
   },
+  capture: () => ipcRenderer.invoke("nori:capture"),
+  hideForDay: () => ipcRenderer.invoke("nori:hide-for-day"),
 };
 
 contextBridge.exposeInMainWorld("nori", bridge);

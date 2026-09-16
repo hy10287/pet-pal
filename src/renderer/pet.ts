@@ -284,6 +284,8 @@ async function main(): Promise<void> {
         edgeSnap = !edgeSnap;
         void bridge.saveConfig({ edgeSnap });
       }
+      if (command.type === "capture") void bridge.capture();
+      if (command.type === "hide-for-day") void bridge.hideForDay();
       if (command.type === "toggle-hud") {
         hudOn = !hudOn;
         void bridge.setUiChrome?.({ hudOn });

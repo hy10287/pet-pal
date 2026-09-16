@@ -58,6 +58,8 @@ export function createWebBridge(): NoriBridge {
     getTips: async () => DEFAULT_TIPS,
     onTipsChanged: () => () => undefined,
     onTip: () => () => undefined,
+    capture: async () => undefined,
+    hideForDay: async () => undefined,
   };
 }
 
