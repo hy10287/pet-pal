@@ -1,6 +1,7 @@
 import type { AppConfig, BootstrapPayload, DisplayPresetId } from "../shared/types";
 import { applyPreviewStageCrop, parseDisplayPreset } from "./display-crop";
 import type { NoriBridge } from "../main/preload";
+import { DEFAULT_TIPS } from "../tips/schema";
 
 declare global {
   interface Window {
@@ -54,6 +55,11 @@ export function createWebBridge(): NoriBridge {
     quit: () => undefined,
     onCommand: () => () => undefined,
     reportIntent: () => undefined,
+    getTips: async () => DEFAULT_TIPS,
+    onTipsChanged: () => () => undefined,
+    onTip: () => () => undefined,
+    capture: async () => undefined,
+    hideForDay: async () => undefined,
   };
 }
 

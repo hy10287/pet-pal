@@ -16,6 +16,8 @@ export type MenuCommand =
   | { type: "toggle-click-through" }
   | { type: "toggle-edge-snap" }
   | { type: "quit" }
+  | { type: "capture" }
+  | { type: "hide-for-day" }
   | { type: "scale"; value: number }
   | { type: "display-preset"; id: DisplayPresetId }
   | { type: "motion"; id: string };
@@ -297,6 +299,12 @@ export function renderMenu(
   menu.append(
     section("系统", [
       snapBtn,
+      actionButton("截图保存", () => {
+        onCommand({ type: "capture" });
+      }),
+      actionButton("隐藏 24 小时", () => {
+        onCommand({ type: "hide-for-day" });
+      }),
       actionButton(state.hudOn ? "隐藏调试 HUD" : "显示调试 HUD", () => {
         onCommand({ type: "toggle-hud" });
       }),

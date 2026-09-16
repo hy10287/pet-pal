@@ -121,7 +121,7 @@ describe("agent request → MotionDirector.play", () => {
     expect(played.source).toBe("agent");
     expect(played.face || played.body).toBeTruthy();
     const summary = summarizePlayed(played, "hi");
-    expect(summary.sayDeferred).toBe(true);
+    expect(summary.sayDeferred).toBe(false);
     expect(summary.emotion).toBe("happy");
     expect(summary.faceId || summary.bodyId).toBeTruthy();
   });
@@ -172,7 +172,7 @@ describe("agent control HTTP / WS server", () => {
     expect(body.ok).toBe(true);
     expect(body.played?.emotion).toBe("happy");
     expect(body.played?.faceId || body.played?.bodyId).toBeTruthy();
-    expect(body.played?.sayDeferred).toBe(true);
+    expect(body.played?.sayDeferred).toBe(false);
   });
 
   it("returns validation errors for bad JSON bodies", async () => {

@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { AgentIntentCommand, AgentPlayedSummary } from "../shared/agent-control";
 import type { AppConfig, BootstrapPayload, DisplayPresetId } from "../shared/types";
+import type { TipMessage } from "../tips/message-center";
+import type { TipsConfig } from "../tips/schema";
 
 export type NoriRendererCommand = string | AgentIntentCommand;
 
@@ -30,6 +32,11 @@ export interface NoriBridge {
   quit: () => void;
   onCommand: (handler: (command: NoriRendererCommand) => void) => () => void;
   reportIntent: (requestId: string, played: AgentPlayedSummary) => void;
+  getTips: () => Promise<TipsConfig>;
+  onTipsChanged: (handler: (tips: TipsConfig) => void) => () => void;
+  onTip: (handler: (msg: TipMessage) => void) => () => void;
+  capture: () => Promise<void>;
+  hideForDay: () => Promise<void>;
 }
 
 const bridge: NoriBridge = {
@@ -56,6 +63,19 @@ const bridge: NoriBridge = {
   reportIntent: (requestId, played) => {
     ipcRenderer.send("nori:intent-result", requestId, played);
   },
+  getTips: () => ipcRenderer.invoke("nori:tips:get"),
+  onTipsChanged: (handler) => {
+    const listener = (_event: unknown, tips: TipsConfig) => handler(tips);
+    ipcRenderer.on("nori:tips-changed", listener);
+    return () => ipcRenderer.removeListener("nori:tips-changed", listener);
+  },
+  onTip: (handler) => {
+    const listener = (_event: unknown, msg: TipMessage) => handler(msg);
+    ipcRenderer.on("nori:tip", listener);
+    return () => ipcRenderer.removeListener("nori:tip", listener);
+  },
+  capture: () => ipcRenderer.invoke("nori:capture"),
+  hideForDay: () => ipcRenderer.invoke("nori:hide-for-day"),
 };
 
 contextBridge.exposeInMainWorld("nori", bridge);
