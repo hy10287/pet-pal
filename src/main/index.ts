@@ -37,7 +37,10 @@ let configState = loadAppConfig(ROOT);
 let persistPath = join(ROOT, "config", "local.json");
 let agentControl: AgentControlHandle | null = null;
 
-const pendingIntents = new Map<string, (played?: AgentPlayedSummary) => void>();
+const pendingIntents = new Map<
+  string,
+  { resolve: (played?: AgentPlayedSummary) => void; reject: (error: Error) => void }
+>();
 
 function sendCommand(command: string | { type: "intent"; requestId: string } & AgentControlRequest): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -52,15 +55,18 @@ function forwardAgentIntent(req: AgentControlRequest): Promise<AgentPlayedSummar
     return Promise.reject(new Error("renderer not ready"));
   }
   const requestId = newIntentRequestId();
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       pendingIntents.delete(requestId);
-      resolve(undefined);
+      reject(new Error("renderer timeout"));
     }, 4000);
-    pendingIntents.set(requestId, (played) => {
-      clearTimeout(timer);
-      pendingIntents.delete(requestId);
-      resolve(played);
+    pendingIntents.set(requestId, {
+      resolve: (played) => {
+        clearTimeout(timer);
+        pendingIntents.delete(requestId);
+        resolve(played);
+      },
+      reject,
     });
     sendCommand({ type: "intent", requestId, ...req });
   });
@@ -299,7 +305,7 @@ app.whenReady().then(() => {
   ipcMain.on("nori:quit", () => app.quit());
 
   ipcMain.on("nori:intent-result", (_event, requestId: string, played: AgentPlayedSummary) => {
-    pendingIntents.get(requestId)?.(played);
+    pendingIntents.get(requestId)?.resolve(played);
   });
 
   if (isAgentControlEnabled()) {

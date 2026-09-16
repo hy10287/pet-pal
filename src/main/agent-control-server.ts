@@ -1,19 +1,20 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { Socket } from "node:net";
 import type { Duplex } from "node:stream";
+import { WebSocketServer, type WebSocket } from "ws";
 import {
   AGENT_CONTROL_BODY_LIMIT,
   AGENT_CONTROL_HOST,
   type AgentControlRequest,
   type AgentControlResponse,
   type AgentPlayedSummary,
+  hasValidControlToken,
+  isAllowedOrigin,
   isLoopbackRemoteAddress,
   parseAgentControlRequest,
   resolveControlBind,
 } from "../shared/agent-control";
-
-const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 export interface AgentControlServerOptions {
   port?: number;
@@ -30,15 +31,40 @@ export interface AgentControlHandle {
   close: () => Promise<void>;
 }
 
+const RATE_LIMIT_PER_SECOND = 20;
+let rateWindowStart = 0;
+let rateWindowCount = 0;
+
+/** 每秒最多 20 次；超出返回 false。测试可通过导出 resetRateLimit() 复位。 */
+export function takeRateLimitSlot(now = Date.now()): boolean {
+  if (now - rateWindowStart >= 1000) {
+    rateWindowStart = now;
+    rateWindowCount = 0;
+  }
+  if (rateWindowCount >= RATE_LIMIT_PER_SECOND) return false;
+  rateWindowCount += 1;
+  return true;
+}
+
+export function resetRateLimit(): void {
+  rateWindowStart = 0;
+  rateWindowCount = 0;
+}
+
 /**
  * Localhost agent bridge (v1).
  *
- * Binds 127.0.0.1 only. No auth — any process (or a page that can POST JSON
- * to loopback) can drive MotionDirector. Do not publish or port-forward this.
+ * Binds 127.0.0.1 only. Origin + optional NORI_CONTROL_TOKEN gate the HTTP/WS
+ * surface. Do not publish or port-forward this.
  */
 export function startAgentControlServer(options: AgentControlServerOptions): Promise<AgentControlHandle> {
   const bind = resolveControlBind({ port: options.port, env: options.env });
   const sockets = new Set<Socket>();
+  const wss = new WebSocketServer({
+    noServer: true,
+    maxPayload: AGENT_CONTROL_BODY_LIMIT,
+    perMessageDeflate: false,
+  });
 
   const server = createServer((req, res) => {
     void handleHttp(req, res, options.onIntent);
@@ -49,8 +75,45 @@ export function startAgentControlServer(options: AgentControlServerOptions): Pro
     socket.on("close", () => sockets.delete(socket));
   });
 
-  server.on("upgrade", (req, socket) => {
-    void handleUpgrade(req, socket, options.onIntent);
+  server.on("upgrade", (req, socket, head) => {
+    const path = pathname(req.url ?? "/");
+    if (!isIntentPath(path)) return rejectUpgrade(socket, 404, "not found");
+    if (!isLoopbackRemoteAddress(req.socket.remoteAddress)) return rejectUpgrade(socket, 403, "loopback only");
+    if (!isAllowedOrigin(req.headers.origin)) return rejectUpgrade(socket, 403, "origin not allowed");
+    if (!hasValidControlToken(req.headers["x-nori-token"], new URL(req.url ?? "/", "http://127.0.0.1").searchParams.get("token"))) {
+      return rejectUpgrade(socket, 403, "invalid token");
+    }
+    if (String(req.headers["sec-websocket-version"] ?? "") !== "13") {
+      socket.write("HTTP/1.1 426 Upgrade Required\r\nSec-WebSocket-Version: 13\r\nConnection: close\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+  });
+
+  wss.on("connection", (ws: WebSocket) => {
+    ws.on("error", () => ws.terminate());
+    ws.on("message", (data, isBinary) => {
+      if (isBinary) {
+        ws.close(1003);
+        return;
+      }
+      void (async () => {
+        if (!takeRateLimitSlot()) {
+          ws.send(JSON.stringify({ ok: false, error: "rate limited" }));
+          return;
+        }
+        let raw: unknown;
+        try {
+          raw = JSON.parse(String(data));
+        } catch {
+          ws.send(JSON.stringify({ ok: false, error: "body must be valid JSON" }));
+          return;
+        }
+        const result = await dispatchIntent(raw, options.onIntent);
+        if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(result.body));
+      })();
+    });
   });
 
   return new Promise((resolve, reject) => {
@@ -64,33 +127,41 @@ export function startAgentControlServer(options: AgentControlServerOptions): Pro
         host: AGENT_CONTROL_HOST,
         port,
         url: `http://${AGENT_CONTROL_HOST}:${port}/intent`,
-        close: () => closeServer(server, sockets),
+        close: () => closeServer(server, sockets, wss),
       });
     });
   });
 }
 
-function closeServer(server: Server, sockets: Set<Socket>): Promise<void> {
-  for (const socket of sockets) {
-    socket.destroy();
-  }
-  sockets.clear();
+function rejectUpgrade(socket: Duplex, status: number, message: string): void {
+  socket.write(`HTTP/1.1 ${status} ${message}\r\nConnection: close\r\n\r\n`);
+  socket.destroy();
+}
+
+function closeServer(server: Server, sockets: Set<Socket>, wss: WebSocketServer): Promise<void> {
+  for (const client of wss.clients) client.terminate();
   return new Promise((resolve, reject) => {
-    server.close((error) => {
-      if (error) reject(error);
-      else resolve();
+    wss.close(() => {
+      for (const socket of sockets) {
+        socket.destroy();
+      }
+      sockets.clear();
+      server.close((error) => {
+        if (error) reject(error);
+        else resolve();
+      });
     });
   });
 }
 
-function writeJson(res: ServerResponse, status: number, body: unknown): void {
+function writeJson(res: ServerResponse, status: number, body: unknown, headOnly = false): void {
   const payload = JSON.stringify(body);
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
     "content-length": Buffer.byteLength(payload),
   });
-  res.end(payload);
+  res.end(headOnly ? undefined : payload);
 }
 
 function healthBody(req: IncomingMessage): Record<string, unknown> {
@@ -137,7 +208,8 @@ function readBody(req: IncomingMessage, limit = AGENT_CONTROL_BODY_LIMIT): Promi
     req.on("data", (chunk: Buffer) => {
       size += chunk.length;
       if (size > limit) {
-        req.destroy();
+        req.removeAllListeners("data");
+        req.resume();
         reject(new Error("payload too large"));
         return;
       }
@@ -161,7 +233,7 @@ async function dispatchIntent(
     return { status: 200, body };
   } catch (error) {
     const message = error instanceof Error ? error.message : "intent failed";
-    const status = /not ready/i.test(message) ? 503 : 500;
+    const status = /not ready/i.test(message) ? 503 : /timeout/i.test(message) ? 504 : 500;
     return { status, body: { ok: false, error: message } };
   }
 }
@@ -171,8 +243,9 @@ async function handleHttp(
   res: ServerResponse,
   onIntent: AgentControlServerOptions["onIntent"],
 ): Promise<void> {
+  const headOnly = req.method === "HEAD";
   if (!isLoopbackRemoteAddress(req.socket.remoteAddress)) {
-    writeJson(res, 403, { ok: false, error: "loopback only" });
+    writeJson(res, 403, { ok: false, error: "loopback only" }, headOnly);
     return;
   }
 
@@ -180,23 +253,32 @@ async function handleHttp(
   const method = (req.method ?? "GET").toUpperCase();
 
   if ((method === "GET" || method === "HEAD") && isHealthPath(path)) {
-    writeJson(res, 200, healthBody(req));
+    writeJson(res, 200, healthBody(req), headOnly);
     return;
   }
 
   if (!isIntentPath(path)) {
-    writeJson(res, 404, { ok: false, error: "not found" });
+    writeJson(res, 404, { ok: false, error: "not found" }, headOnly);
     return;
   }
 
   if (method !== "POST") {
     res.setHeader("allow", "POST, GET");
-    writeJson(res, 405, { ok: false, error: "use POST JSON" });
+    writeJson(res, 405, { ok: false, error: "use POST JSON" }, headOnly);
+    return;
+  }
+
+  if (!isAllowedOrigin(req.headers.origin)) {
+    writeJson(res, 403, { ok: false, error: "origin not allowed" }, headOnly);
+    return;
+  }
+  if (!hasValidControlToken(req.headers["x-nori-token"], new URL(req.url ?? "/", "http://127.0.0.1").searchParams.get("token"))) {
+    writeJson(res, 403, { ok: false, error: "invalid token" }, headOnly);
     return;
   }
 
   if (!isJsonContentType(req.headers["content-type"])) {
-    writeJson(res, 415, { ok: false, error: "content-type must be application/json" });
+    writeJson(res, 415, { ok: false, error: "content-type must be application/json" }, headOnly);
     return;
   }
 
@@ -205,7 +287,7 @@ async function handleHttp(
     text = await readBody(req);
   } catch (error) {
     const message = error instanceof Error ? error.message : "invalid body";
-    writeJson(res, message === "payload too large" ? 413 : 400, { ok: false, error: message });
+    writeJson(res, message === "payload too large" ? 413 : 400, { ok: false, error: message }, headOnly);
     return;
   }
 
@@ -213,164 +295,19 @@ async function handleHttp(
   try {
     raw = text.trim() ? JSON.parse(text) : null;
   } catch {
-    writeJson(res, 400, { ok: false, error: "body must be valid JSON" });
+    writeJson(res, 400, { ok: false, error: "body must be valid JSON" }, headOnly);
+    return;
+  }
+
+  if (!takeRateLimitSlot()) {
+    writeJson(res, 429, { ok: false, error: "rate limited" }, headOnly);
     return;
   }
 
   const result = await dispatchIntent(raw, onIntent);
-  writeJson(res, result.status, result.body);
-}
-
-async function handleUpgrade(
-  req: IncomingMessage,
-  socket: Duplex,
-  onIntent: AgentControlServerOptions["onIntent"],
-): Promise<void> {
-  if (!isLoopbackRemoteAddress(req.socket.remoteAddress)) {
-    socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
-    socket.destroy();
-    return;
-  }
-
-  const path = pathname(req.url ?? "/");
-  const upgrade = String(req.headers.upgrade ?? "").toLowerCase();
-  const key = req.headers["sec-websocket-key"];
-  if (
-    !isIntentPath(path) ||
-    upgrade !== "websocket" ||
-    typeof key !== "string" ||
-    !key
-  ) {
-    socket.write("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
-    socket.destroy();
-    return;
-  }
-
-  const accept = createHash("sha1").update(key + WS_GUID).digest("base64");
-  socket.write(
-    "HTTP/1.1 101 Switching Protocols\r\n" +
-      "Upgrade: websocket\r\n" +
-      "Connection: Upgrade\r\n" +
-      `Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
-  );
-
-  let buffer = Buffer.alloc(0);
-  socket.on("data", (chunk) => {
-    buffer = Buffer.concat([buffer, chunk]);
-    const frames = takeWsFrames(buffer);
-    buffer = Buffer.from(frames.rest);
-    if (frames.closed) {
-      socket.end(encodeWsFrame(Buffer.alloc(0), 0x8));
-      return;
-    }
-    for (const ping of frames.pings) {
-      socket.write(encodeWsFrame(ping, 0xA));
-    }
-    for (const message of frames.texts) {
-      void (async () => {
-        let raw: unknown;
-        try {
-          raw = JSON.parse(message);
-        } catch {
-          socket.write(encodeWsText(JSON.stringify({ ok: false, error: "body must be valid JSON" })));
-          return;
-        }
-        const result = await dispatchIntent(raw, onIntent);
-        socket.write(encodeWsText(JSON.stringify(result.body)));
-      })();
-    }
-  });
-}
-
-export function wsAcceptKey(key: string): string {
-  return createHash("sha1").update(key + WS_GUID).digest("base64");
+  writeJson(res, result.status, result.body, headOnly);
 }
 
 export function newIntentRequestId(): string {
   return randomUUID();
-}
-
-export function encodeWsText(text: string): Buffer {
-  return encodeWsFrame(Buffer.from(text, "utf8"), 0x1);
-}
-
-export function encodeWsFrame(payload: Buffer, opcode: number, masked = false): Buffer {
-  const len = payload.length;
-  let header: Buffer;
-  if (len < 126) {
-    header = Buffer.alloc(2);
-    header[1] = (masked ? 0x80 : 0) | len;
-  } else if (len < 65536) {
-    header = Buffer.alloc(4);
-    header[1] = (masked ? 0x80 : 0) | 126;
-    header.writeUInt16BE(len, 2);
-  } else {
-    header = Buffer.alloc(10);
-    header[1] = (masked ? 0x80 : 0) | 127;
-    header.writeUInt32BE(0, 2);
-    header.writeUInt32BE(len, 6);
-  }
-  header[0] = 0x80 | (opcode & 0x0f);
-  if (!masked) return Buffer.concat([header, payload]);
-  const mask = Buffer.from([0x12, 0x34, 0x56, 0x78]);
-  const maskedPayload = Buffer.alloc(payload.length);
-  for (let i = 0; i < payload.length; i += 1) {
-    maskedPayload[i] = payload[i]! ^ mask[i % 4]!;
-  }
-  return Buffer.concat([header, mask, maskedPayload]);
-}
-
-function takeWsFrames(buffer: Buffer): {
-  texts: string[];
-  pings: Buffer[];
-  rest: Buffer;
-  closed: boolean;
-} {
-  const texts: string[] = [];
-  const pings: Buffer[] = [];
-  let offset = 0;
-  let closed = false;
-
-  while (offset + 2 <= buffer.length) {
-    const b1 = buffer[offset]!;
-    const b2 = buffer[offset + 1]!;
-    const opcode = b1 & 0x0f;
-    const masked = Boolean(b2 & 0x80);
-    let len = b2 & 0x7f;
-    let header = 2;
-    if (len === 126) {
-      if (offset + 4 > buffer.length) break;
-      len = buffer.readUInt16BE(offset + 2);
-      header = 4;
-    } else if (len === 127) {
-      if (offset + 10 > buffer.length) break;
-      const high = buffer.readUInt32BE(offset + 2);
-      const low = buffer.readUInt32BE(offset + 6);
-      if (high !== 0 || low > AGENT_CONTROL_BODY_LIMIT) {
-        closed = true;
-        break;
-      }
-      len = low;
-      header = 10;
-    }
-    const maskLen = masked ? 4 : 0;
-    if (offset + header + maskLen + len > buffer.length) break;
-    const maskStart = offset + header;
-    const dataStart = maskStart + maskLen;
-    const payload = Buffer.from(buffer.subarray(dataStart, dataStart + len));
-    if (masked) {
-      for (let i = 0; i < payload.length; i += 1) {
-        payload[i] = payload[i]! ^ buffer[maskStart + (i % 4)]!;
-      }
-    }
-    offset = dataStart + len;
-    if (opcode === 0x8) {
-      closed = true;
-      break;
-    }
-    if (opcode === 0x9) pings.push(payload);
-    if (opcode === 0x1) texts.push(payload.toString("utf8"));
-  }
-
-  return { texts, pings, rest: buffer.subarray(offset), closed };
 }
