@@ -1,9 +1,11 @@
 import type { CatalogItem, DisplayPresetId } from "../shared/types";
-import { DISPLAY_PRESETS } from "./display-crop";
+import { DISPLAY_PRESETS, USER_SCALE_MAX, USER_SCALE_MIN } from "../shared/display-preset";
+import { faceSafeRect, placePopupAwayFromFace, type Rect } from "../shared/ui-chrome";
 
 export interface MenuHooks {
   onOpen?: (info?: { menuHeight: number; clientX: number; clientY: number }) => void;
   onClose?: () => void;
+  faceRect?: () => Rect;
 }
 
 export type MenuCommand =
@@ -12,6 +14,7 @@ export type MenuCommand =
   | { type: "random" }
   | { type: "toggle-hud" }
   | { type: "toggle-click-through" }
+  | { type: "toggle-edge-snap" }
   | { type: "quit" }
   | { type: "scale"; value: number }
   | { type: "display-preset"; id: DisplayPresetId }
@@ -21,12 +24,13 @@ export interface MenuState {
   scale: number;
   hudOn: boolean;
   clickThrough: boolean;
+  edgeSnap: boolean;
   displayPreset: DisplayPresetId;
   motions: { id: string; label: string }[];
 }
 
-export const SCALE_MIN = 0.6;
-export const SCALE_MAX = 1.8;
+export const SCALE_MIN = USER_SCALE_MIN;
+export const SCALE_MAX = USER_SCALE_MAX;
 
 const EMOTION_ZH: Record<string, string> = {
   neutral: "待机",
@@ -74,6 +78,21 @@ export function bodyMotionsForMenu(items: CatalogItem[]): { id: string; label: s
     .map((item) => ({ id: item.id, label: motionMenuLabel(item) }));
 }
 
+/** Overlay must use the crop/stage, not the browser viewport (preview is a large Chrome window). */
+export function overlayViewport(
+  stage: { clientWidth: number; clientHeight: number } | null,
+  fallback: { innerWidth: number; innerHeight: number },
+): { width: number; height: number } {
+  const width = stage?.clientWidth ?? 0;
+  const height = stage?.clientHeight ?? 0;
+  if (width > 0 && height > 0) return { width, height };
+  return { width: fallback.innerWidth, height: fallback.innerHeight };
+}
+
+function stageViewport(): { width: number; height: number } {
+  return overlayViewport(document.getElementById("stage"), window);
+}
+
 /** Ignore the pointer event that opened the menu (right-click mouseup/click). */
 export function shouldDismissMenu(openedAt: number, now: number, targetInMenu: boolean, graceMs = 320): boolean {
   if (targetInMenu) return false;
@@ -84,56 +103,80 @@ export function bindContextMenu(
   root: HTMLElement,
   menu: HTMLElement,
   onCommand: (command: MenuCommand) => void,
-  hooks: MenuHooks & { getState: () => MenuState } ,
-): void {
+  hooks: MenuHooks & { getState: () => MenuState; isBusy?: () => boolean },
+): { close: () => void; isOpen: () => boolean; lastClosedAt: () => number } {
   let openedAt = 0;
+  let lastClosedAt = 0;
   let open = false;
+  let outsidePointer = false;
 
   const hide = () => {
     if (!open) return;
     open = false;
+    lastClosedAt = performance.now();
     menu.hidden = true;
     hooks.onClose?.();
   };
 
-  const placeMenu = (clientX: number, clientY: number) => {
+  const place = () => {
     const rect = menu.getBoundingClientRect();
-    const x = Math.min(Math.max(8, clientX), Math.max(8, window.innerWidth - rect.width - 8));
-    const y = Math.min(Math.max(8, clientY), Math.max(8, window.innerHeight - rect.height - 8));
-    menu.style.left = `${x}px`;
-    menu.style.top = `${y}px`;
-    return rect;
+    const viewport = stageViewport();
+    const face = hooks.faceRect?.() ?? faceSafeRect(viewport);
+    const pos = placePopupAwayFromFace(face, { width: rect.width, height: rect.height }, viewport);
+    menu.style.left = `${pos.x}px`;
+    menu.style.top = `${pos.y}px`;
   };
 
-  const show = (clientX: number, clientY: number) => {
+  const show = (clientX = 0, clientY = 0) => {
     open = true;
     openedAt = performance.now();
     renderMenu(menu, hooks.getState(), onCommand, hide);
     menu.hidden = false;
+    hooks.onOpen?.({ menuHeight: 0, clientX, clientY });
     requestAnimationFrame(() => {
-      const rect = placeMenu(clientX, clientY);
-      hooks.onOpen?.({ menuHeight: Math.ceil(rect.height), clientX, clientY });
-      // After main expands the window for a tall menu, re-clamp into the new viewport.
-      requestAnimationFrame(() => placeMenu(clientX, clientY));
+      place();
+      requestAnimationFrame(place);
     });
+  };
+
+  const toggle = (clientX: number, clientY: number) => {
+    if (open) hide();
+    else show(clientX, clientY);
   };
 
   root.addEventListener("contextmenu", (event) => {
     event.preventDefault();
     event.stopPropagation();
-    show(event.clientX, event.clientY);
+    if (menu.contains(event.target as Node)) return;
+    toggle(event.clientX, event.clientY);
+  });
+
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && open) hide();
   });
 
   window.addEventListener(
     "pointerdown",
     (event) => {
-      if (!open) return;
+      if (!open || event.button !== 0) return;
       const inMenu = menu.contains(event.target as Node);
-      if (!shouldDismissMenu(openedAt, performance.now(), inMenu)) return;
+      outsidePointer = shouldDismissMenu(openedAt, performance.now(), inMenu);
+    },
+    true,
+  );
+
+  window.addEventListener(
+    "pointerup",
+    (event) => {
+      if (!outsidePointer || event.button !== 0) return;
+      outsidePointer = false;
+      if (!open || hooks.isBusy?.()) return;
       hide();
     },
     true,
   );
+
+  return { close: hide, isOpen: () => open, lastClosedAt: () => lastClosedAt };
 }
 
 export function renderMenu(
@@ -144,6 +187,24 @@ export function renderMenu(
 ): void {
   menu.replaceChildren();
   menu.classList.add("nori-menu");
+
+  const headingRow = document.createElement("div");
+  headingRow.className = "menu-head";
+  const title = document.createElement("h2");
+  title.textContent = "设置";
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "menu-close";
+  close.setAttribute("aria-label", "关闭设置");
+  close.textContent = "×";
+  close.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    hide();
+  });
+  headingRow.append(title, close);
+  bindMenuDrag(headingRow, menu);
+  menu.append(headingRow);
 
   menu.append(
     section("交互", [
@@ -226,10 +287,17 @@ export function renderMenu(
   }
   menu.append(section("身体动作", [motionWrap]));
 
+  const snapBtn = actionButton(state.edgeSnap ? "贴边吸附：开" : "贴边吸附：关", () => {
+    onCommand({ type: "toggle-edge-snap" });
+    const next = !state.edgeSnap;
+    state.edgeSnap = next;
+    snapBtn.textContent = next ? "贴边吸附：开" : "贴边吸附：关";
+  });
+  snapBtn.dataset.edgeSnap = "1";
   menu.append(
     section("系统", [
+      snapBtn,
       actionButton(state.hudOn ? "隐藏调试 HUD" : "显示调试 HUD", () => {
-        hide();
         onCommand({ type: "toggle-hud" });
       }),
       actionButton(state.clickThrough ? "关闭鼠标穿透" : "打开鼠标穿透", () => {
@@ -242,6 +310,42 @@ export function renderMenu(
       }),
     ]),
   );
+}
+
+/** Drag the popup by its header so it can be moved off the character. */
+export function bindMenuDrag(handle: HTMLElement, menu: HTMLElement): void {
+  let dragging = false;
+  let origin = { x: 0, y: 0, left: 0, top: 0 };
+
+  handle.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    if ((event.target as HTMLElement | null)?.closest?.(".menu-close")) return;
+    dragging = true;
+    origin = {
+      x: event.clientX,
+      y: event.clientY,
+      left: menu.offsetLeft,
+      top: menu.offsetTop,
+    };
+    handle.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    event.stopPropagation();
+  });
+
+  handle.addEventListener("pointermove", (event) => {
+    if (!dragging) return;
+    const x = origin.left + event.clientX - origin.x;
+    const y = origin.top + event.clientY - origin.y;
+    const viewport = stageViewport();
+    const maxX = Math.max(8, viewport.width - menu.offsetWidth - 8);
+    const maxY = Math.max(8, viewport.height - menu.offsetHeight - 8);
+    menu.style.left = `${Math.min(maxX, Math.max(8, x))}px`;
+    menu.style.top = `${Math.min(maxY, Math.max(8, y))}px`;
+  });
+
+  handle.addEventListener("pointerup", () => {
+    dragging = false;
+  });
 }
 
 function section(title: string, children: HTMLElement[]): HTMLElement {

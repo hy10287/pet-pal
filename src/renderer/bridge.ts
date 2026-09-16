@@ -23,7 +23,20 @@ export function createWebBridge(): NoriBridge {
       const boot = await getBootstrap();
       return { ...boot.config, ...patch };
     },
-    setUiChrome: async () => ({ width: 420, height: 560, hudOn: false, menuOpen: false }),
+    setUiChrome: async (state) => {
+      // Size follows the live crop (#stage). Do not re-read bootstrap displayPreset —
+      // that would undo a preset the user just switched.
+      const stage = document.getElementById("stage");
+      const width = stage?.clientWidth ?? 0;
+      const height = stage?.clientHeight ?? 0;
+      return {
+        width,
+        height,
+        hudOn: Boolean(state.hudOn),
+        menuOpen: Boolean(state.menuOpen),
+        menuHeight: state.menuHeight,
+      };
+    },
     setDisplayPreset: async (preset: DisplayPresetId) => {
       const boot = await getBootstrap();
       const id = parseDisplayPreset(preset);

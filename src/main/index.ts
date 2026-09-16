@@ -8,6 +8,7 @@ import {
   isAgentControlEnabled,
 } from "../shared/agent-control";
 import { displayWindowSize, parseDisplayPreset, resolveFullWindow } from "../shared/display-preset";
+import { EDGE_SNAP_PX, snapRectToEdges } from "../shared/edge-snap";
 import {
   fileUrlIfExists,
   loadAppConfig,
@@ -19,7 +20,7 @@ import {
 import { startAgentControlServer, type AgentControlHandle, newIntentRequestId } from "./agent-control-server";
 import { applyClickThrough, commitPetWindowSize, createPetWindow, preloadPath, rendererHtml } from "./window";
 import { createTray } from "./tray";
-import { movedBounds, placeAt, sameSize } from "./window-move";
+import { applyLockedSize, movedBounds, placeAt, sameSize } from "./window-move";
 
 const ROOT = join(__dirname, "../..");
 const preview = process.argv.includes("--preview");
@@ -133,7 +134,7 @@ app.whenReady().then(() => {
   };
 
   const applyWindowChrome = () => {
-    if (win.isDestroyed()) return;
+    if (win.isDestroyed() || dragging) return;
     const size = displayWindowSize(fullWindow, parseDisplayPreset(configState.config.displayPreset), {
       hudOn,
       menuOpen,
@@ -141,8 +142,9 @@ app.whenReady().then(() => {
     });
     lockedSize.width = size.width;
     lockedSize.height = size.height;
+    const next = applyLockedSize(win.getBounds(), lockedSize);
     const end = beginApply();
-    commitPetWindowSize(win, lockedSize);
+    commitPetWindowSize(win, lockedSize, next);
     end();
   };
 
@@ -183,6 +185,7 @@ app.whenReady().then(() => {
   ipcMain.handle("nori:save-config", (_event, patch: Partial<AppConfig>) => {
     const next = { ...configState.config, ...patch, window: fullWindow };
     if (patch.displayPreset) next.displayPreset = parseDisplayPreset(patch.displayPreset);
+    if (patch && "edgeSnap" in patch) next.edgeSnap = patch.edgeSnap === true;
     configState = { config: next, source: persistPath };
     saveAppConfig(persistPath, configState.config);
     return configState.config;
@@ -239,6 +242,21 @@ app.whenReady().then(() => {
 
   ipcMain.on("nori:drag-end", () => {
     dragging = false;
+    if (win.isDestroyed()) return;
+    if (configState.config.edgeSnap) {
+      const bounds = win.getBounds();
+      const snapped = snapRectToEdges(
+        bounds,
+        screen.getDisplayMatching(bounds).workArea,
+        true,
+        EDGE_SNAP_PX,
+      );
+      if (snapped.x !== bounds.x || snapped.y !== bounds.y) {
+        const end = beginApply();
+        win.setBounds(placeAt(snapped.x, snapped.y, lockedSize));
+        end();
+      }
+    }
     applyWindowChrome();
   });
 

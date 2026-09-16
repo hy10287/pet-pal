@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_FULL_WINDOW,
-  DEFAULT_MENU_CHROME,
-  MENU_CHROME_PAD,
   MIN_WINDOW_HEIGHT,
   croppedWindowSize,
   displayWindowSize,
@@ -70,7 +68,7 @@ describe("displayWindowSize", () => {
     }
   });
 
-  it("does not jump to the full baseline just because HUD is on", () => {
+  it("does not change crop height when HUD is on", () => {
     expect(displayWindowSize(FULL, "compact", { hudOn: true }).height).toBe(179);
     expect(displayWindowSize(FULL, "balanced", { hudOn: true }).height).toBe(246);
     expect(displayWindowSize(FULL, "standard", { hudOn: true }).height).toBe(325);
@@ -85,22 +83,27 @@ describe("displayWindowSize", () => {
     expect(heights).toEqual([...heights].sort((a, b) => a - b));
   });
 
-  it("may grow for a tall menu but stays cropped after close", () => {
+  it("does not grow the window just because HUD is on", () => {
+    expect(displayWindowSize(FULL, "compact", { hudOn: true })).toEqual(croppedWindowSize(FULL, "compact"));
+    expect(displayWindowSize(FULL, "balanced", { hudOn: true }).width).toBe(FULL.width);
+  });
+
+  it("does not grow a side strip while the right-click menu is open", () => {
     const open = displayWindowSize(FULL, "compact", { menuOpen: true, menuHeight: 420 });
-    expect(open.height).toBe(420 + MENU_CHROME_PAD);
-    expect(open.height).toBeLessThan(FULL.height);
-    expect(displayWindowSize(FULL, "compact", { menuOpen: false }).height).toBe(179);
+    expect(open).toEqual(croppedWindowSize(FULL, "compact"));
+    expect(displayWindowSize(FULL, "compact", { menuOpen: false })).toEqual(open);
+    expect(open.width).toBe(FULL.width);
   });
 
-  it("uses a default menu chrome when height was not measured, not the full baseline", () => {
-    const open = displayWindowSize(FULL, "balanced", { menuOpen: true });
-    expect(open.height).toBe(DEFAULT_MENU_CHROME);
-    expect(open.height).not.toBe(FULL.height);
+  it("ignores HUD when deciding popup chrome", () => {
+    const open = displayWindowSize(FULL, "balanced", { hudOn: true });
+    expect(open.height).toBe(246);
+    expect(open.width).toBe(FULL.width);
   });
 
-  it("never grows past the full-body baseline", () => {
+  it("never grows past the crop, even with a tall menu measurement", () => {
     const open = displayWindowSize(FULL, "compact", { menuOpen: true, menuHeight: 900 });
-    expect(open.height).toBe(FULL.height);
+    expect(open).toEqual(croppedWindowSize(FULL, "compact"));
   });
 });
 

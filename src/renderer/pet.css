@@ -9,6 +9,10 @@ body {
   font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
 }
 
+body {
+  position: relative;
+}
+
 body.preview {
   background: #1a2230;
 }
@@ -17,7 +21,6 @@ body.preview {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  /* Inline height from JS locks crop when window expands for HUD/menu. */
 }
 
 #stage canvas {
@@ -25,10 +28,11 @@ body.preview {
 }
 
 #notice {
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 30;
+  max-width: min(200px, 46vw);
   padding: 8px 10px;
   border-radius: 10px;
   background: rgba(12, 16, 24, 0.72);
@@ -39,12 +43,12 @@ body.preview {
 }
 
 #hud {
-  position: fixed;
-  top: 8px;
+  position: absolute;
   left: 8px;
+  bottom: 8px;
   z-index: 50;
-  width: min(268px, calc(100vw - 16px));
-  max-height: calc(100vh - 16px);
+  width: min(240px, calc(100% - 16px));
+  max-height: min(42%, 220px);
   overflow: auto;
   padding: 8px 10px 6px;
   border-radius: 12px;
@@ -56,7 +60,6 @@ body.preview {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
 }
 
-/* Short window-crop: keep HUD readable via scroll; help collapsed by default in JS */
 #hud .hud-help:not([open]) summary {
   margin-bottom: 0;
 }
@@ -98,10 +101,10 @@ body.preview {
 }
 
 #menu {
-  position: fixed;
+  position: absolute;
   z-index: 60;
   width: 228px;
-  max-height: min(78vh, calc(100vh - 16px), 520px);
+  max-height: min(78%, calc(100% - 16px), 520px);
   overflow: auto;
   padding: 8px;
   border-radius: 14px;
@@ -110,6 +113,30 @@ body.preview {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42);
   pointer-events: auto;
   color: #eef4ff;
+}
+
+#menu .menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 4px 8px;
+  cursor: grab;
+}
+
+#menu .menu-head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #7de3cf;
+}
+
+#menu .menu-close {
+  width: auto;
+  padding: 2px 8px;
+  font-size: 16px;
+  line-height: 1;
+  color: #8ea0b8;
+  cursor: pointer;
 }
 
 #menu .menu-section {
@@ -142,7 +169,8 @@ body.preview {
   font-size: 13px;
 }
 
-#menu button:hover {
+#menu button:hover,
+#menu .menu-close:hover {
   background: #2a364c;
 }
 
@@ -165,7 +193,7 @@ body.preview {
 }
 
 #menu .menu-motions {
-  max-height: 196px;
+  max-height: 140px;
   overflow: auto;
   padding-right: 2px;
 }
@@ -183,7 +211,7 @@ body.preview {
 }
 
 #chat {
-  position: fixed;
+  position: absolute;
   z-index: 35;
   left: 52%;
   top: 38%;

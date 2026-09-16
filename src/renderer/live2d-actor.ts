@@ -6,7 +6,8 @@ import type { LookState } from "../interaction/mouse-follow";
 import type { ExpressionParams } from "./expression";
 import { FACE_PARAM_IDS } from "./expression";
 import type { PetActor } from "./actor";
-import { lockFullBodyFitted, topPinHome } from "./display-crop";
+import { lockFullBodyFitted, MODEL_ANCHOR_Y, bottomPinHome } from "./display-crop";
+import { visualScale } from "./fit-scale";
 import { pickMotionUrls } from "./motion-url";
 
 type CoreModel = {
@@ -48,8 +49,6 @@ export class Live2DActor implements PetActor {
   readonly kind = "live2d" as const;
   readonly view = new Container();
   private scaleValue = 1;
-  /** full = center; cropped = top-pin (window height already cropped). */
-  private cropFull = true;
   private fitted: number | null = null;
   private natural = { width: 0, height: 0 };
   private measured = false;
@@ -67,7 +66,7 @@ export class Live2DActor implements PetActor {
   ) {
     model.autoFocus = false;
     model.autoInteract = false;
-    model.anchor?.set(0.5, 0.62);
+    model.anchor?.set(0.5, MODEL_ANCHOR_Y);
     this.view.addChild(model);
   }
 
@@ -194,7 +193,7 @@ export class Live2DActor implements PetActor {
   }
 
   private applyLayout(): void {
-    const { width } = this.viewSize;
+    const { width, height } = this.viewSize;
     this.ensureMeasured();
     this.fitted = lockFullBodyFitted(
       this.fitted,
@@ -204,15 +203,10 @@ export class Live2DActor implements PetActor {
       this.baseline.height,
     );
     const fitted = this.fitted > 0 ? this.fitted : 0.22;
-    this.model.scale?.set(fitted * this.scaleValue);
+    this.model.anchor?.set(0.5, MODEL_ANCHOR_Y);
+    this.model.scale?.set(visualScale(fitted, this.scaleValue));
     if (width <= 0) return;
-    this.home = topPinHome(
-      width,
-      this.natural.height,
-      fitted,
-      this.scaleValue,
-      this.baseline.height,
-    );
+    this.home = bottomPinHome(width, height, this.scaleValue, this.baseline.height);
     this.model.position.set(this.home.x, this.home.y);
   }
 
@@ -224,10 +218,11 @@ export class Live2DActor implements PetActor {
     const local = this.model.getLocalBounds?.();
     const world = this.model.getBounds?.();
     // Prefer the larger measurement so hair/skirt aren't clipped later.
-    const w = Math.max(local?.width ?? 0, world?.width ?? 0, 1);
-    const h = Math.max(local?.height ?? 0, world?.height ?? 0, 1);
-    this.natural = { width: w, height: h };
+    const w = Math.max(local?.width ?? 0, world?.width ?? 0, 0);
+    const h = Math.max(local?.height ?? 0, world?.height ?? 0, 0);
     this.model.scale?.set(prevX, prevY);
+    if (w < 8 || h < 8) return;
+    this.natural = { width: w, height: h };
     this.measured = true;
   }
 
