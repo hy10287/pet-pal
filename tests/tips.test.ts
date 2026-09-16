@@ -7,8 +7,10 @@ import {
   shouldAccept,
   shouldSuppressByQuietHours,
 } from "../src/tips/message-center";
+import { inDateRange, inHourRange } from "../src/shared/tips-time";
+import { nextIdleState } from "../src/tips/idle-policy";
 import { DEFAULT_TIPS, parseTips } from "../src/tips/schema";
-import { tipForInteraction } from "../src/tips/triggers";
+import { startupGreeting, tipForInteraction } from "../src/tips/triggers";
 
 describe("shouldAccept", () => {
   it("accepts the first message when nothing is showing", () => {
@@ -59,6 +61,76 @@ describe("quiet hours", () => {
     expect(shouldSuppressByQuietHours(["23-7"], { passive: true }, 8)).toBe(false);
     expect(shouldSuppressByQuietHours(["23-7"], { passive: false }, 23)).toBe(false);
     expect(shouldSuppressByQuietHours(["23-7"], {}, 23)).toBe(false);
+  });
+
+  it("matches hour ranges including midnight wrap (23-7)", () => {
+    expect(inHourRange(23, "23-7")).toBe(true);
+    expect(inHourRange(0, "23-7")).toBe(true);
+    expect(inHourRange(7, "23-7")).toBe(true);
+    expect(inHourRange(8, "23-7")).toBe(false);
+    expect(inHourRange(8, "8")).toBe(true);
+    expect(inHourRange(9, "8")).toBe(false);
+  });
+
+  it("matches seasonal ranges including year wrap (12/30-01/02)", () => {
+    expect(inDateRange(12, 30, "12/30-01/02")).toBe(true);
+    expect(inDateRange(12, 31, "12/30-01/02")).toBe(true);
+    expect(inDateRange(1, 1, "12/30-01/02")).toBe(true);
+    expect(inDateRange(1, 2, "12/30-01/02")).toBe(true);
+    expect(inDateRange(1, 3, "12/30-01/02")).toBe(false);
+    expect(inDateRange(6, 1, "12/30-01/02")).toBe(false);
+  });
+});
+
+describe("idle policy", () => {
+  it("fires the first idle tip at firstIdleSec and then respects repeatEverySec", () => {
+    const policy = { firstIdleSec: 300, repeatEverySec: 1800 };
+    const idle = nextIdleState(policy, { firedCount: 0, lastFiredAtMs: null }, 299, 10_000);
+    expect(idle.fire).toBe(false);
+    expect(idle.state).toEqual({ firedCount: 0, lastFiredAtMs: null });
+    const first = nextIdleState(policy, idle.state, 300, 10_000);
+    expect(first.fire).toBe(true);
+    expect(first.state.firedCount).toBe(1);
+    const tooSoon = nextIdleState(policy, first.state, 400, 10_000 + 1_799_000);
+    expect(tooSoon.fire).toBe(false);
+    const again = nextIdleState(policy, first.state, 400, 10_000 + 1_800_000);
+    expect(again.fire).toBe(true);
+    const reset = nextIdleState(policy, again.state, 10, 20_000_000);
+    expect(reset.fire).toBe(false);
+    expect(reset.state).toEqual({ firedCount: 0, lastFiredAtMs: null });
+  });
+});
+
+describe("startup greeting", () => {
+  it("prefers seasons over time over welcome for the startup greeting", () => {
+    const tips = parseTips({
+      schemaVersion: 1,
+      welcome: ["welcome-only"],
+      time: [{ hour: "8-10", text: ["time-slot"] }],
+      seasons: [{ date: "01/01-01/02", text: ["season-{year}"] }],
+    });
+    expect(tips.ok).toBe(true);
+    if (!tips.ok) return;
+    const vars = { year: "2026", hour: "9", model: "nori" };
+    const season = startupGreeting(tips.value, { month: 1, day: 1, hour: 9, year: 2026 }, vars, () => 0);
+    expect(season?.text).toBe("season-2026");
+    expect(season?.priority).toBe(11);
+    expect(season?.passive).toBe(true);
+    const timeOnly = startupGreeting(
+      { ...tips.value, seasons: [] },
+      { month: 6, day: 1, hour: 9, year: 2026 },
+      vars,
+      () => 0,
+    );
+    expect(timeOnly?.text).toBe("time-slot");
+    const welcome = startupGreeting(
+      { ...tips.value, seasons: [], time: [] },
+      { month: 6, day: 1, hour: 9, year: 2026 },
+      vars,
+      () => 0,
+    );
+    expect(welcome?.text).toBe("welcome-only");
+    expect(startupGreeting(DEFAULT_TIPS, { month: 6, day: 1, hour: 15, year: 2026 }, vars)?.text).toBe("今天也在这里。");
   });
 });
 

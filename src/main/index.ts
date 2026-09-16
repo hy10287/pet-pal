@@ -21,7 +21,9 @@ import { startAgentControlServer, type AgentControlHandle, newIntentRequestId } 
 import { applyClickThrough, commitPetWindowSize, createPetWindow, preloadPath, rendererHtml } from "./window";
 import { createTray } from "./tray";
 import { applyLockedSize, movedBounds, placeAt, sameSize } from "./window-move";
-import { DEFAULT_TIPS } from "../tips/schema";
+import { startIdleWatcher } from "./idle-watcher";
+import { getTips, loadTips, startTipsWatcher } from "./tips-store";
+import { startupGreeting } from "../tips/triggers";
 
 const ROOT = join(__dirname, "../..");
 const preview = process.argv.includes("--preview");
@@ -37,6 +39,7 @@ if (process.platform === "linux") {
 let configState = loadAppConfig(ROOT);
 let persistPath = join(ROOT, "config", "local.json");
 let agentControl: AgentControlHandle | null = null;
+let stopTipsRuntime: (() => void) | null = null;
 
 const pendingIntents = new Map<string, (played?: AgentPlayedSummary) => void>();
 
@@ -95,6 +98,7 @@ app.whenReady().then(() => {
   if (userLoaded.source !== "defaults") {
     configState = userLoaded;
   }
+  loadTips(ROOT);
 
   const fullWindow = resolveFullWindow(configState.config.window);
   if (fullWindow.width !== configState.config.window.width || fullWindow.height !== configState.config.window.height) {
@@ -181,8 +185,37 @@ app.whenReady().then(() => {
     quit: () => app.quit(),
   });
 
+  const tipVars = (): Record<string, string> => {
+    const now = new Date();
+    const file = (configState.config.modelPath || "").replace(/\\/g, "/").split("/").pop() ?? "";
+    const model = file.replace(/\.[^.]+$/, "") || "nori";
+    return {
+      hour: String(now.getHours()),
+      year: String(now.getFullYear()),
+      model,
+    };
+  };
+  const stopWatch = startTipsWatcher(ROOT, win);
+  const stopIdle = startIdleWatcher(win, getTips, tipVars);
+  stopTipsRuntime = () => {
+    stopWatch();
+    stopIdle();
+  };
+  win.webContents.on("did-finish-load", () => {
+    setTimeout(() => {
+      if (win.isDestroyed()) return;
+      const now = new Date();
+      const greet = startupGreeting(
+        getTips(),
+        { month: now.getMonth() + 1, day: now.getDate(), hour: now.getHours(), year: now.getFullYear() },
+        tipVars(),
+      );
+      if (greet) win.webContents.send("nori:tip", greet);
+    }, 300);
+  });
+
   ipcMain.handle("nori:bootstrap", () => bootstrapPayload());
-  ipcMain.handle("nori:tips:get", () => DEFAULT_TIPS);
+  ipcMain.handle("nori:tips:get", () => getTips());
 
   ipcMain.handle("nori:save-config", (_event, patch: Partial<AppConfig>) => {
     const next = { ...configState.config, ...patch, window: fullWindow };
@@ -322,6 +355,8 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
+  stopTipsRuntime?.();
+  stopTipsRuntime = null;
   const handle = agentControl;
   agentControl = null;
   if (handle) void handle.close();
