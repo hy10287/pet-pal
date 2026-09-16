@@ -11,7 +11,8 @@
     "start": "npm run build && node launch.js",
     "preview": "npm run build && node dist/main/preview-server.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "engines": {
     "node": ">=18"

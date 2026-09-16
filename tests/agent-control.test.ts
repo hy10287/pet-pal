@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { connect } from "node:net";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import WebSocket from "ws";
 import { MotionDirector } from "../src/emotion/director";
 import { parseCatalog } from "../src/emotion/catalog";
 import {
@@ -201,8 +202,7 @@ describe("agent control HTTP / WS server", () => {
     expect(wrongType.status).toBe(415);
   });
 
-  // Global WebSocket is Node 21+. GitHub Actions CI is Node 20.
-  it.skipIf(typeof globalThis.WebSocket !== "function")("accepts the same JSON over WebSocket", async () => {
+  it("accepts the same JSON over WebSocket", async () => {
     const handle = await listen();
     const ws = new WebSocket(`ws://127.0.0.1:${handle.port}/intent`);
     const reply = await new Promise<string>((resolve, reject) => {
@@ -505,8 +505,7 @@ describe("agent-control origin / token / websocket hardening", () => {
     });
     liveServers.push(handle);
     const replies: Array<{ ok: boolean; error?: string }> = [];
-    const ws = await new Promise<import("ws")>((resolve, reject) => {
-      const WebSocket = require("ws") as typeof import("ws");
+    const ws = await new Promise<WebSocket>((resolve, reject) => {
       const client = new WebSocket(`ws://127.0.0.1:${handle.port}/intent`);
       client.on("open", () => resolve(client));
       client.on("error", reject);
