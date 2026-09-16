@@ -7,8 +7,8 @@ import type { PetActor } from "./actor";
 import { lockFullBodyFitted, bottomPinFromLocalBottom } from "./display-crop";
 import { visualScale } from "./fit-scale";
 
-const FALLBACK_NATURAL = { width: 220, height: 340 };
-/** Local Y of the bottom of the drawn character (shadow). */
+const FALLBACK_NATURAL = { width: 220, height: 360 };
+/** Local Y of the bottom of the drawn character (shadow). Head ellipse top is ~-184. */
 const FALLBACK_LOCAL_BOTTOM = 170;
 
 interface Spark {
@@ -197,7 +197,6 @@ export class FallbackActor implements PetActor {
     const eyeOpen = Math.max(0.12, (params.ParamEyeLOpen ?? 1) * this.blink);
 
     this.view.rotation = (tilt * Math.PI) / 180;
-    this.view.pivot.set(0, 20);
 
     const yOff = -motion.bounce - nod * 0.35;
 
