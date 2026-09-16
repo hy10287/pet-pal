@@ -1,11 +1,13 @@
 {
-  "modelPath": "C:/Live2D/Hiyori/hiyori_pro_t11.model3.json",
+  "modelPath": "C:/Users/33166/Desktop/新建文件夹 (3)",
   "cubismCorePath": "vendor/live2dcubismcore.min.js",
-  "motionsTagsPath": "C:/Live2D/motions/motions.tags.json",
-  "motionsDir": "C:/Live2D/motions",
+  "motionsTagsPath": "fixtures/motions.tags.sample.json",
+  "motionsDir": "",
   "scale": 1,
   "clickThrough": false,
-  "debugHud": true,
+  "debugHud": false,
+  "edgeSnap": false,
+  "displayPreset": "full",
   "agentControlPort": 3927,
   "window": {
     "width": 420,

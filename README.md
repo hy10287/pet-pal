@@ -12,7 +12,7 @@ npm test
 npm start          # 推荐：node launch.js，避开 ELECTRON_RUN_AS_NODE
 ```
 
-Windows 上填好官方 Sample 模型路径后，会弹出透明置顶角色窗；托盘可退出。
+Windows 上会自动扫描 `C:/Users/33166/Desktop/新建文件夹 (3)` 里的 `.model3.json` 作为本地占位角色（也可在 `config/local.json` 写 `modelPath`）。有 Cubism Core + 模型时弹出透明置顶角色窗；托盘可退出。
 
 没有 Cubism Core / 模型时，会使用**原创占位角色 Nori**（非任何游戏模型），交互与检索链路仍然完整。
 
@@ -58,14 +58,14 @@ vendor/live2dcubismcore.min.js
 本仓库**不捆绑任何版权角色模型**（也不应提交到 Git）。请只在本地放入你拥有授权或官方 Sample 的模型/动作；`assets/kanade/`、`assets/model/` 已加入 `.gitignore`。若历史提交里曾误传私有资源，请用 git filter-repo 清理后再 force-push。请使用 Live2D 官方免费 Sample，例如 [Hiyori Momose](https://www.live2d.com/en/learn/sample/)。
 
 1. 下载并解压官方 Sample（Cubism 4 `.model3.json`）。
-2. 复制 `config/windows.example.json` → `config/local.json`（不入库），按本机路径改：
+2. 复制 `config/windows.example.json` → `config/local.json`（不入库），按本机路径改。`modelPath` 可以是 `.model3.json` 文件，也可以是包含它的文件夹：
 
 ```json
 {
-  "modelPath": "C:/Live2D/Hiyori/hiyori_pro_t11.model3.json",
+  "modelPath": "C:/Users/33166/Desktop/新建文件夹 (3)",
   "cubismCorePath": "vendor/live2dcubismcore.min.js",
-  "motionsTagsPath": "C:/Live2D/motions/motions.tags.json",
-  "motionsDir": "C:/Live2D/motions"
+  "motionsTagsPath": "fixtures/motions.tags.sample.json",
+  "motionsDir": ""
 }
 ```
 
@@ -75,6 +75,8 @@ vendor/live2dcubismcore.min.js
 - `motionsDir`: `""`（空则只走 sample catalog + 参数混合）
 
 3. 再次 `npm start`。
+
+未配置 `modelPath` / `NORI_MODEL_PATH` 时，启动也会尝试上述桌面文件夹（递归查找 `.model3.json`）。Windows 桌宠窗关闭 `thickFrame`，拖到侧边/上边时会把**画出的角色**贴到屏幕边缘（Live2D 画布空白可探出窗外或平移到窗口边）。
 
 相对路径相对仓库根目录；Windows 绝对路径用正斜杠即可（`C:/...`）。`config/local.json` 不会提交。
 
@@ -105,7 +107,7 @@ Demo 的 sample catalog 即使没有真实 motion 文件，也会用参数混合
 | 右键 | 打开设置弹层（叠在裁切窗口内，可拖标题栏；点空白 / Esc / 再右键关闭） |
 | 设置 · 大小 | 缩放 0.6–1.8，以显示范围底边为锚点（仅此滑杆，无滚轮缩放） |
 | 设置 · 显示范围 | 窗口裁切：头肩 / 上半身 / 到腰 / 全身 |
-| 设置 · 贴边吸附 | 默认关；开时拖到距屏幕工作区边缘 ≤8px 松手对齐 |
+| 设置 · 贴边吸附 | 默认关；开时拖到距**屏幕**边缘 ≤8px 松手对齐**角色**（可贴到最上/最左/最右；空画布可探出屏外） |
 | 设置 · 系统 | 待机 / 随机情绪 / 穿透 / HUD / 退出 |
 | 鼠标移动 | `ParamAngle*` / `ParamEyeBall*` 阻尼跟随 |
 | `H` | 调试 HUD（当前 intent + face/body id，叠在窗口左下） |

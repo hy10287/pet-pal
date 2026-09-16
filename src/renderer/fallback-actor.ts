@@ -35,6 +35,8 @@ export class FallbackActor implements PetActor {
   private blink = 1;
   private nextBlink = 2.4;
   private bounds = { x: 0, y: 0, width: 220, height: 360 };
+  private placeShift = { x: 0, y: 0 };
+  private restVisual = { x: 0, y: 0, width: 0, height: 0 };
 
   constructor() {
     this.view.addChild(this.root);
@@ -102,7 +104,24 @@ export class FallbackActor implements PetActor {
       this.scaleValue,
       this.baseline.height,
     );
-    this.view.position.set(home.x, home.y);
+    this.restVisual = {
+      x: home.x - (FALLBACK_NATURAL.width / 2) * vis,
+      y: home.y + (FALLBACK_LOCAL_BOTTOM - FALLBACK_NATURAL.height) * vis,
+      width: FALLBACK_NATURAL.width * vis,
+      height: FALLBACK_NATURAL.height * vis,
+    };
+    this.view.position.set(home.x + this.placeShift.x, home.y + this.placeShift.y);
+  }
+
+  setPlaceShift(x: number, y: number): void {
+    this.placeShift = { x, y };
+    if (this.viewSize.width <= 0) return;
+    this.applyLayout();
+  }
+
+  visualRect() {
+    if (this.restVisual.width > 0 && this.restVisual.height > 0) return this.restVisual;
+    return { x: 0, y: 0, width: this.viewSize.width, height: this.viewSize.height };
   }
 
   hitTest(x: number, y: number): HitZone {

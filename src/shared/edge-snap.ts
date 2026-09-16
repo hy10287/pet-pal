@@ -9,7 +9,9 @@ export interface SnapRect {
 }
 
 /**
- * Snap a window to the nearest work-area edge when it is within `distance` px.
+ * Snap a window to the nearest **screen** edge when it is within `distance` px.
+ * Uses the display `bounds` (not workArea) so the pet can sit on the true
+ * top/left/right, including over the taskbar.
  * Only intended for pointer-up / drag-end — never while the pointer is held,
  * so the pet can be dragged off an edge without sticking.
  *

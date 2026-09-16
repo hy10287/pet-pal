@@ -1,24 +1,10 @@
-import { BrowserWindow, screen, type BrowserWindowConstructorOptions } from "electron";
+import { BrowserWindow, screen } from "electron";
 import { join } from "node:path";
 import { MIN_WINDOW_HEIGHT } from "../shared/display-preset";
-import { applyLockedSize, sameSize } from "./window-move";
+import { PET_WINDOW_CHROME } from "../shared/pet-window-chrome";
+import { applyLockedSize, sameSize, type WindowRect } from "./window-move";
 
-/**
- * Desktop-pet chrome used by PPet / Live2DPet: square corners so the window can
- * sit on true screen edges, no taskbar button (tray owns quit), no native frame.
- */
-export const PET_WINDOW_CHROME = {
-  frame: false,
-  transparent: true,
-  backgroundColor: "#00000000",
-  hasShadow: false,
-  alwaysOnTop: true,
-  skipTaskbar: true,
-  resizable: false,
-  maximizable: false,
-  fullscreenable: false,
-  roundedCorners: false,
-} as const satisfies Partial<BrowserWindowConstructorOptions>;
+export { PET_WINDOW_CHROME };
 
 export interface PetWindowOptions {
   width: number;
@@ -59,6 +45,8 @@ export function createPetWindow(options: PetWindowOptions): BrowserWindow {
   win.setAlwaysOnTop(true, "screen-saver");
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   win.setMenuBarVisibility(false);
+  // Frameless pets must stay movable; Windows 11 snap-layouts otherwise keep a gap.
+  win.setMovable(true);
 
   void win.loadFile(options.page, {
     query: { preview: options.preview ? "1" : "0" },
@@ -75,7 +63,8 @@ export function createPetWindow(options: PetWindowOptions): BrowserWindow {
 
 /**
  * Apply a locked size on a typically non-resizable window.
- * Temporarily allows resize, lowers min size so shrinks are not clamped, then restores.
+ * Only unlocks resize when the crop size actually changes. Toggling resizable
+ * on Windows can clamp the HWND back into the work area and undo edge placement.
  */
 export function commitPetWindowSize(
   win: BrowserWindow,
@@ -87,11 +76,17 @@ export function commitPetWindowSize(
   const next = position
     ? { x: Math.round(position.x), y: Math.round(position.y), width: size.width, height: size.height }
     : applyLockedSize(current, size);
+  if (sameSize(current, size)) {
+    if (current.x !== next.x || current.y !== next.y) {
+      placePetWindow(win, next);
+    }
+    return;
+  }
   const wasResizable = win.isResizable();
   try {
     win.setMinimumSize(1, MIN_WINDOW_HEIGHT);
     if (!wasResizable) win.setResizable(true);
-    win.setBounds(next, false);
+    placePetWindow(win, next);
     if (!sameSize(win.getBounds(), size)) {
       win.setSize(size.width, size.height);
     }
@@ -101,6 +96,34 @@ export function commitPetWindowSize(
       win.setMinimumSize(Math.min(size.width, 200), MIN_WINDOW_HEIGHT);
     }
   }
+}
+
+/**
+ * Move/size the pet without the Windows work-area clamp sticking if we can
+ * avoid it. Callers compare the return value to `next` to shift the character
+ * when the HWND still cannot hang off-screen.
+ */
+export function placePetWindow(win: BrowserWindow, next: WindowRect): WindowRect {
+  if (win.isDestroyed()) return next;
+  win.setBounds(next, false);
+  let actual = win.getBounds();
+  if (actual.x !== next.x || actual.y !== next.y) {
+    win.setPosition(next.x, next.y, false);
+    actual = win.getBounds();
+  }
+  if (
+    (actual.x !== next.x || actual.y !== next.y) &&
+    typeof win.setContentBounds === "function"
+  ) {
+    win.setContentBounds(next, false);
+    actual = win.getBounds();
+  }
+  return {
+    x: actual.x,
+    y: actual.y,
+    width: actual.width,
+    height: actual.height,
+  };
 }
 
 export function applyClickThrough(win: BrowserWindow, ignore: boolean): void {

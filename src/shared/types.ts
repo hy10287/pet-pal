@@ -67,7 +67,7 @@ export interface AppConfig {
   /** Window-crop preset. Default: balanced / 上半身. Does not change model scale. */
   displayPreset: DisplayPresetId;
   /**
-   * Snap the window to the screen work-area edge on drag-end when within 8px.
+   * Snap the drawn character to the display bounds on drag-end when within 8px.
    * Default off; stored so the feature can be toggled and rolled back.
    */
   edgeSnap: boolean;
