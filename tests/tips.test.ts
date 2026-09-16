@@ -1,7 +1,65 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  pickText,
+  renderTemplate,
+  shouldAccept,
+  shouldSuppressByQuietHours,
+} from "../src/tips/message-center";
 import { DEFAULT_TIPS, parseTips } from "../src/tips/schema";
+
+describe("shouldAccept", () => {
+  it("accepts the first message when nothing is showing", () => {
+    expect(shouldAccept(null, { priority: 1 })).toBe(true);
+  });
+
+  it("lets a higher priority message replace a lower one", () => {
+    expect(shouldAccept({ priority: 8 }, { priority: 9 })).toBe(true);
+  });
+
+  it("blocks a lower priority message", () => {
+    expect(shouldAccept({ priority: 9 }, { priority: 8 })).toBe(false);
+  });
+
+  it("lets an equal priority message replace when override is true", () => {
+    expect(shouldAccept({ priority: 9 }, { priority: 9, override: true })).toBe(true);
+    expect(shouldAccept({ priority: 9 }, { priority: 9 })).toBe(true);
+  });
+
+  it("blocks an equal priority message when override is false", () => {
+    expect(shouldAccept({ priority: 9 }, { priority: 9, override: false })).toBe(false);
+    expect(shouldAccept({ priority: 9 }, { priority: 10, override: false })).toBe(true);
+  });
+});
+
+describe("templates", () => {
+  it("renders known template variables and keeps unknown ones", () => {
+    expect(renderTemplate("hi {model} {hour} {year} {idle} {unknown}", {
+      model: "hiyori",
+      hour: "8",
+      year: "2026",
+      idle: "5",
+    })).toBe("hi hiyori 8 2026 5 {unknown}");
+  });
+
+  it("picks a random entry from an array deterministically with an injected rng", () => {
+    expect(pickText(["a", "b", "c"], () => 0)).toBe("a");
+    expect(pickText(["a", "b", "c"], () => 0.99)).toBe("c");
+    expect(pickText([], () => 0)).toBeNull();
+    expect(pickText("only")).toBe("only");
+  });
+});
+
+describe("quiet hours", () => {
+  it("suppresses passive messages during quiet hours but keeps direct feedback", () => {
+    expect(shouldSuppressByQuietHours(["23-7"], { passive: true }, 23)).toBe(true);
+    expect(shouldSuppressByQuietHours(["23-7"], { passive: true }, 2)).toBe(true);
+    expect(shouldSuppressByQuietHours(["23-7"], { passive: true }, 8)).toBe(false);
+    expect(shouldSuppressByQuietHours(["23-7"], { passive: false }, 23)).toBe(false);
+    expect(shouldSuppressByQuietHours(["23-7"], {}, 23)).toBe(false);
+  });
+});
 
 describe("parseTips", () => {
   it("ignores unknown reaction keys and unknown schema versions", () => {
