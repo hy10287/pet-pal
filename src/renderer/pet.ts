@@ -28,7 +28,7 @@ import { hudSnapshot, renderHud } from "./hud";
 import { loadCubismCore, loadLive2DModel } from "./live2d-actor";
 import { SCALE_MAX, SCALE_MIN, bindContextMenu, bodyMotionsForMenu } from "./menu";
 import { croppedWindowSize, displayWindowSize } from "../shared/display-preset";
-import { faceSafeRect } from "../shared/ui-chrome";
+import { SETTINGS_PANEL_GAP, SETTINGS_PANEL_WIDTH, sidePanelRect } from "../shared/ui-chrome";
 
 const HOVER_DWELL_MS = 1200;
 const DOUBLE_MS = 320;
@@ -170,9 +170,13 @@ async function main(): Promise<void> {
   const applyPreset = (id: DisplayPresetId) => {
     displayPreset = id;
     layoutToCrop();
-    void bridge.setDisplayPreset(id).then(() => {
+    void bridge.setDisplayPreset(id).then(async () => {
       layoutToCrop();
-      syncChrome();
+      if (settingsOpen) {
+        applyChromeLayout(await bridge.setMenuOpen(true));
+      } else {
+        syncChrome();
+      }
     });
   };
 
@@ -216,13 +220,28 @@ async function main(): Promise<void> {
     },
   });
 
+  const applyChromeLayout = (layout: {
+    side: "left" | "right";
+    width: number;
+    height: number;
+    stage: { width: number; height: number };
+  }) => {
+    stageEl.style.left = layout.side === "left" ? `${SETTINGS_PANEL_GAP + SETTINGS_PANEL_WIDTH}px` : "0px";
+    document.body.style.width = `${layout.width}px`;
+    document.body.style.height = `${layout.height}px`;
+    menuEl.style.left = `${sidePanelRect(layout.side, layout.stage).x}px`;
+    menuEl.style.top = `${sidePanelRect(layout.side, layout.stage).y}px`;
+    menuEl.style.width = `${SETTINGS_PANEL_WIDTH}px`;
+    menuEl.style.maxHeight = `${sidePanelRect(layout.side, layout.stage).height}px`;
+  };
+
   const syncChrome = () => {
     if (preview) {
       const size = displayWindowSize(fullWindow, displayPreset, { menuOpen: settingsOpen });
       document.body.style.width = `${size.width}px`;
       document.body.style.height = `${size.height}px`;
     }
-    bridge.setMenuOpen(settingsOpen);
+    void bridge.setMenuOpen(settingsOpen);
     if (settingsOpen || chat.isOpen()) bridge.setHoverOpaque(true);
   };
 
@@ -263,16 +282,17 @@ async function main(): Promise<void> {
         displayPreset,
         motions: bodyMotionsForMenu(boot.catalog.items),
       }),
-      faceRect: () => faceSafeRect(croppedWindowSize(fullWindow, displayPreset)),
       isBusy: () => dragActive,
-      onOpen: () => {
+      onOpen: async () => {
         settingsOpen = true;
         chat.close();
-        syncChrome();
+        applyChromeLayout(await bridge.setMenuOpen(true));
       },
-      onClose: () => {
+      onClose: async () => {
         settingsOpen = false;
-        syncChrome();
+        const crop = croppedWindowSize(fullWindow, displayPreset);
+        applyChromeLayout({ side: "right", ...crop, stage: crop });
+        await bridge.setMenuOpen(false);
       },
     },
   );
@@ -352,6 +372,7 @@ async function main(): Promise<void> {
         }
       } else if (gesture === "window-drag") {
         if (!dragActive) {
+          settings.close();
           dragActive = true;
           bridge.dragStart?.();
         }

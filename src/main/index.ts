@@ -7,8 +7,9 @@ import {
   type AgentPlayedSummary,
   isAgentControlEnabled,
 } from "../shared/agent-control";
-import { displayWindowSize, parseDisplayPreset, resolveFullWindow } from "../shared/display-preset";
+import { displayWindowSize, parseDisplayPreset, resolveFullWindow, croppedWindowSize } from "../shared/display-preset";
 import { EDGE_SNAP_PX, snapRectToEdges } from "../shared/edge-snap";
+import { popupWindowBounds, type PopupSide } from "../shared/ui-chrome";
 import {
   fileUrlIfExists,
   loadAppConfig,
@@ -136,6 +137,8 @@ app.whenReady().then(() => {
   let hudOn = false;
   let dragging = false;
   let dragOffset = { x: 0, y: 0 };
+  let popupSide: PopupSide = "right";
+  let stageBoundsBeforePopup: Electron.Rectangle | null = null;
 
   const beginApply = () => {
     applyingPreset = true;
@@ -149,16 +152,25 @@ app.whenReady().then(() => {
 
   const applyWindowChrome = () => {
     if (win.isDestroyed() || dragging) return;
-    const size = displayWindowSize(fullWindow, parseDisplayPreset(configState.config.displayPreset), {
-      hudOn,
-      menuOpen,
-      menuHeight,
-    });
+    const crop = croppedWindowSize(fullWindow, parseDisplayPreset(configState.config.displayPreset));
+    let size = { width: crop.width, height: crop.height };
+    let position: { x: number; y: number } | undefined;
+    if (menuOpen) {
+      const base = stageBoundsBeforePopup ?? { ...win.getBounds(), width: crop.width, height: crop.height };
+      const stage = { ...base, width: crop.width, height: crop.height };
+      stageBoundsBeforePopup = stage;
+      const { bounds, side } = popupWindowBounds(stage, screen.getDisplayMatching(stage).workArea);
+      size = { width: bounds.width, height: bounds.height };
+      position = { x: bounds.x, y: bounds.y };
+      popupSide = side;
+    } else if (stageBoundsBeforePopup) {
+      position = { x: stageBoundsBeforePopup.x, y: stageBoundsBeforePopup.y };
+      stageBoundsBeforePopup = null;
+    }
     lockedSize.width = size.width;
     lockedSize.height = size.height;
-    const next = applyLockedSize(win.getBounds(), lockedSize);
     const end = beginApply();
-    commitPetWindowSize(win, lockedSize, next);
+    commitPetWindowSize(win, lockedSize, position);
     end();
   };
 
@@ -286,12 +298,18 @@ app.whenReady().then(() => {
     applyClickThrough(win, !opaque);
   });
 
-  ipcMain.on("nori:menu-open", (_event, open: boolean, height?: number) => {
+  ipcMain.handle("nori:menu-open", (_e, open: boolean) => {
     menuOpen = Boolean(open);
-    if (typeof height === "number" && height > 0) menuHeight = height;
-    if (!menuOpen) menuHeight = 0;
     restoreClickThrough();
     applyWindowChrome();
+    const crop = croppedWindowSize(fullWindow, parseDisplayPreset(configState.config.displayPreset));
+    return {
+      menuOpen,
+      side: popupSide,
+      width: lockedSize.width,
+      height: lockedSize.height,
+      stage: { width: crop.width, height: crop.height },
+    };
   });
 
   ipcMain.handle("nori:cursor-local", () => {
