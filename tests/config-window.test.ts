@@ -1,6 +1,6 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/main/config";
 
@@ -27,5 +27,10 @@ describe("loadAppConfig window baseline", () => {
     const dirOff = mkdtempSync(join(tmpdir(), "nori-config-"));
     writeFileSync(join(dirOff, "app.config.json"), JSON.stringify({ edgeSnap: "yes" }));
     expect(loadAppConfig("/nonexistent-nori-root", dirOff).config.edgeSnap).toBe(false);
+  });
+
+  it("registers a main-process error handler", () => {
+    const source = readFileSync(resolve(__dirname, "../src/main/index.ts"), "utf8");
+    expect(source).toContain('process.on("uncaughtException"');
   });
 });

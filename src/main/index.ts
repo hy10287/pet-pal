@@ -22,6 +22,13 @@ import { applyClickThrough, commitPetWindowSize, createPetWindow, preloadPath, r
 import { createTray } from "./tray";
 import { applyLockedSize, movedBounds, placeAt, sameSize } from "./window-move";
 
+process.on("uncaughtException", (error) => {
+  console.error("[nori] uncaught exception:", error);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[nori] unhandled rejection:", reason);
+});
+
 const ROOT = join(__dirname, "../..");
 const preview = process.argv.includes("--preview");
 
