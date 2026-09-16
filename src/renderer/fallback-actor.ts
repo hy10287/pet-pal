@@ -4,12 +4,13 @@ import { fallbackHitZone, refineVisibleZone } from "../interaction/hit-zones";
 import type { LookState } from "../interaction/mouse-follow";
 import type { ExpressionParams } from "./expression";
 import type { PetActor } from "./actor";
-import { lockFullBodyFitted, bottomPinFromLocalBottom } from "./display-crop";
+import { lockFullBodyFitted, pinnedTopY } from "./display-crop";
 import { visualScale } from "./fit-scale";
 
 const FALLBACK_NATURAL = { width: 220, height: 360 };
 /** Local Y of the bottom of the drawn character (shadow). Head ellipse top is ~-184. */
 const FALLBACK_LOCAL_BOTTOM = 170;
+const FALLBACK_LOCAL_TOP = FALLBACK_LOCAL_BOTTOM - FALLBACK_NATURAL.height;
 
 interface Spark {
   g: Graphics;
@@ -94,15 +95,8 @@ export class FallbackActor implements PetActor {
     const vis = visualScale(fitted, this.scaleValue);
     this.view.scale.set(vis);
     if (width <= 0) return;
-    const home = bottomPinFromLocalBottom(
-      width,
-      this.viewSize.height,
-      FALLBACK_LOCAL_BOTTOM,
-      fitted,
-      this.scaleValue,
-      this.baseline.height,
-    );
-    this.view.position.set(home.x, home.y);
+    const boxHeight = FALLBACK_NATURAL.height * vis;
+    this.view.position.set(width / 2, pinnedTopY(boxHeight, this.viewSize.height) - FALLBACK_LOCAL_TOP * vis);
   }
 
   hitTest(x: number, y: number): HitZone {
