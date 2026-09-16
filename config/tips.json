@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "quietHours": ["23-7"],
+  "idle": {
+    "text": ["要休息一下吗？", "我在这儿，慢慢来。"],
+    "firstIdleSec": 300,
+    "repeatEverySec": 1800,
+    "timeoutMs": 6000,
+    "priority": 9
+  },
+  "time": [
+    { "hour": "6-9", "text": ["早上好。"] },
+    { "hour": "12-13", "text": ["午休时间，记得吃饭。"] }
+  ],
+  "seasons": [
+    { "date": "01/01-01/02", "text": ["新年快乐，{year} 年也请多指教。"] }
+  ],
+  "welcome": ["今天也在这里。"],
+  "reactions": {
+    "head-click": [{ "priority": 9, "timeoutMs": 4000, "text": ["嗯？"] }],
+    "head-pat": [{ "priority": 9, "timeoutMs": 4000, "text": ["头发要被摸乱啦。"] }],
+    "body-click": [{ "priority": 9, "timeoutMs": 4000, "text": ["怎么了？"] }],
+    "hover-dwell": [{ "priority": 8, "timeoutMs": 4000, "override": false, "text": ["在看什么？"] }],
+    "double-click": [{ "priority": 10, "timeoutMs": 3000, "text": ["哇，吓我一跳。"] }],
+    "capture-ok": [{ "priority": 9, "timeoutMs": 4000, "text": ["已保存截图。"] }],
+    "capture-fail": [{ "priority": 9, "timeoutMs": 4000, "text": ["截图保存失败。"] }]
+  }
+}
