@@ -33,4 +33,10 @@ describe("loadAppConfig window baseline", () => {
     const source = readFileSync(resolve(__dirname, "../src/main/index.ts"), "utf8");
     expect(source).toContain('process.on("uncaughtException"');
   });
+
+  it("keeps a module-level tray reference", () => {
+    const source = readFileSync(resolve(__dirname, "../src/main/index.ts"), "utf8");
+    expect(source).toContain("let tray: Tray | null");
+    expect(source).toContain("tray = createTray(");
+  });
 });

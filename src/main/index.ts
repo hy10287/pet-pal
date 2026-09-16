@@ -1,4 +1,4 @@
-import { BrowserWindow, app, ipcMain, screen } from "electron";
+import { app, BrowserWindow, ipcMain, screen, type Tray } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { AppConfig, BootstrapPayload, DisplayPresetId } from "../shared/types";
@@ -43,6 +43,7 @@ if (process.platform === "linux") {
 let configState = loadAppConfig(ROOT);
 let persistPath = join(ROOT, "config", "local.json");
 let agentControl: AgentControlHandle | null = null;
+let tray: Tray | null = null;
 
 const pendingIntents = new Map<
   string,
@@ -185,7 +186,7 @@ app.whenReady().then(() => {
     }
   });
 
-  createTray(ROOT, {
+  tray = createTray(ROOT, {
     idle: () => sendCommand("idle"),
     random: () => sendCommand("random"),
     toggleHud: () => sendCommand("toggle-hud"),
@@ -333,6 +334,8 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
+  tray?.destroy();
+  tray = null;
   const handle = agentControl;
   agentControl = null;
   if (handle) void handle.close();
