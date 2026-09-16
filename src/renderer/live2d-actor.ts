@@ -203,6 +203,7 @@ export class Live2DActor implements PetActor {
       this.baseline.height,
     );
     const fitted = this.fitted > 0 ? this.fitted : 0.22;
+    this.model.anchor?.set(0.5, MODEL_ANCHOR_Y);
     this.model.scale?.set(visualScale(fitted, this.scaleValue));
     if (width <= 0) return;
     this.home = bottomPinHome(width, height, this.scaleValue, this.baseline.height);

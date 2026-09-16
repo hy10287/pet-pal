@@ -31,6 +31,11 @@ describe("bottomPinHome", () => {
     expect(grown.y).toBe(cropH + (fullH - cropH) * 1.8);
     expect(grown.y - cropH).toBeCloseTo((fullH - cropH) * 1.8);
   });
+
+  it("clamps the slider so pin math matches visualScale", () => {
+    expect(bottomPinHome(420, 179, 9, 560).y).toBe(bottomPinHome(420, 179, 1.8, 560).y);
+    expect(bottomPinHome(420, 179, 0.1, 560).y).toBe(bottomPinHome(420, 179, 0.6, 560).y);
+  });
 });
 
 describe("bottomPinFromLocalBottom", () => {

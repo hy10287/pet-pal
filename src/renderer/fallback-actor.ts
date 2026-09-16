@@ -34,7 +34,7 @@ export class FallbackActor implements PetActor {
   private time = 0;
   private blink = 1;
   private nextBlink = 2.4;
-  private bounds = { x: 0, y: 0, width: 220, height: 340 };
+  private bounds = { x: 0, y: 0, width: 220, height: 360 };
 
   constructor() {
     this.view.addChild(this.root);
@@ -91,7 +91,8 @@ export class FallbackActor implements PetActor {
       this.baseline.height,
     );
     const fitted = this.fitted > 0 ? this.fitted : 1;
-    this.view.scale.set(visualScale(fitted, this.scaleValue));
+    const vis = visualScale(fitted, this.scaleValue);
+    this.view.scale.set(vis);
     if (width <= 0) return;
     const home = bottomPinFromLocalBottom(
       width,

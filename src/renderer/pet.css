@@ -9,6 +9,10 @@ body {
   font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
 }
 
+body {
+  position: relative;
+}
+
 body.preview {
   background: #1a2230;
 }
@@ -24,7 +28,7 @@ body.preview {
 }
 
 #notice {
-  position: fixed;
+  position: absolute;
   left: 8px;
   bottom: 8px;
   z-index: 30;
@@ -39,12 +43,12 @@ body.preview {
 }
 
 #hud {
-  position: fixed;
+  position: absolute;
   left: 8px;
   bottom: 8px;
   z-index: 50;
-  width: min(240px, calc(100vw - 16px));
-  max-height: min(42vh, 220px);
+  width: min(240px, calc(100% - 16px));
+  max-height: min(42%, 220px);
   overflow: auto;
   padding: 8px 10px 6px;
   border-radius: 12px;
@@ -97,10 +101,10 @@ body.preview {
 }
 
 #menu {
-  position: fixed;
+  position: absolute;
   z-index: 60;
   width: 228px;
-  max-height: min(78vh, calc(100vh - 16px), 520px);
+  max-height: min(78%, calc(100% - 16px), 520px);
   overflow: auto;
   padding: 8px;
   border-radius: 14px;
@@ -207,7 +211,7 @@ body.preview {
 }
 
 #chat {
-  position: fixed;
+  position: absolute;
   z-index: 35;
   left: 52%;
   top: 38%;

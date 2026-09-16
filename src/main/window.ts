@@ -1,7 +1,24 @@
-import { BrowserWindow, screen } from "electron";
+import { BrowserWindow, screen, type BrowserWindowConstructorOptions } from "electron";
 import { join } from "node:path";
 import { MIN_WINDOW_HEIGHT } from "../shared/display-preset";
 import { applyLockedSize, sameSize } from "./window-move";
+
+/**
+ * Desktop-pet chrome used by PPet / Live2DPet: square corners so the window can
+ * sit on true screen edges, no taskbar button (tray owns quit), no native frame.
+ */
+export const PET_WINDOW_CHROME = {
+  frame: false,
+  transparent: true,
+  backgroundColor: "#00000000",
+  hasShadow: false,
+  alwaysOnTop: true,
+  skipTaskbar: true,
+  resizable: false,
+  maximizable: false,
+  fullscreenable: false,
+  roundedCorners: false,
+} as const satisfies Partial<BrowserWindowConstructorOptions>;
 
 export interface PetWindowOptions {
   width: number;
@@ -21,21 +38,12 @@ export function createPetWindow(options: PetWindowOptions): BrowserWindow {
   const height = options.height;
 
   const win = new BrowserWindow({
+    ...PET_WINDOW_CHROME,
     width,
     height,
     x: Math.max(display.x + 40, display.x + Math.floor((display.width - width) / 2)),
     y: Math.max(display.y + 40, display.y + Math.floor((display.height - height) / 2)),
-    frame: false,
-    transparent: true,
-    backgroundColor: "#00000000",
-    hasShadow: false,
-    alwaysOnTop: true,
-    skipTaskbar: false,
-    resizable: false,
-    maximizable: false,
-    fullscreenable: false,
     show: false,
-    roundedCorners: true,
     title: "Nori Deskpet",
     webPreferences: {
       preload: options.preload,

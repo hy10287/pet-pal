@@ -65,19 +65,30 @@ async function main(): Promise<void> {
   };
   let displayPreset: DisplayPresetId = parseDisplayPreset(boot.config.displayPreset);
 
-  const syncStageCrop = () => {
-    return applyStageCrop(document.getElementById("stage"), fullWindow, displayPreset);
-  };
-
   if (preview) {
     applyPreviewStageCrop(fullWindow, displayPreset);
   }
 
   let actor: PetActor = new FallbackActor();
+
+  const layoutToCrop = () => {
+    const size = applyStageCrop(stageEl, fullWindow, displayPreset);
+    if (preview) {
+      document.body.style.width = `${size.width}px`;
+      document.body.style.height = `${size.height}px`;
+    }
+    if (
+      Math.abs(app.screen.width - size.width) > 0.5 ||
+      Math.abs(app.screen.height - size.height) > 0.5
+    ) {
+      app.renderer.resize(size.width, size.height);
+    }
+    actor.layout(size.width, size.height);
+  };
+
   app.stage.addChild(actor.view);
   actor.setBaseline(fullWindow.width, fullWindow.height);
-  syncStageCrop();
-  actor.layout(app.screen.width, app.screen.height);
+  layoutToCrop();
   actor.setScale(boot.config.scale);
 
   if (boot.cubismCoreUrl && boot.modelUrl) {
@@ -88,8 +99,7 @@ async function main(): Promise<void> {
       actor = live;
       app.stage.addChild(actor.view);
       actor.setBaseline(fullWindow.width, fullWindow.height);
-      syncStageCrop();
-      actor.layout(app.screen.width, app.screen.height);
+      layoutToCrop();
       actor.setScale(boot.config.scale);
       noticeEl.hidden = true;
     } catch (error) {
@@ -105,7 +115,7 @@ async function main(): Promise<void> {
   }
 
   requestAnimationFrame(() => {
-    actor.layout(app.screen.width, app.screen.height);
+    layoutToCrop();
   });
 
   const director = new MotionDirector(boot.catalog);
@@ -159,9 +169,9 @@ async function main(): Promise<void> {
 
   const applyPreset = (id: DisplayPresetId) => {
     displayPreset = id;
-    syncStageCrop();
+    layoutToCrop();
     void bridge.setDisplayPreset(id).then(() => {
-      actor.layout(app.screen.width, app.screen.height);
+      layoutToCrop();
       syncChrome();
     });
   };
@@ -473,7 +483,7 @@ async function main(): Promise<void> {
 
   window.addEventListener("resize", () => {
     if (gesture === "window-drag") return;
-    actor.layout(app.screen.width, app.screen.height);
+    layoutToCrop();
   });
 }
 

@@ -67,7 +67,7 @@ export function renderHud(el: HTMLElement, state: DirectorDebugState, visible: b
         <li><b>身体</b>：正在播的一条身体 .motion3。</li>
         <li><b>大小</b>：你设的缩放；拖窗口不会改这个值。</li>
         <li><b>动作</b>：file=播身体文件，params=只用参数演。</li>
-        <li><b>穿透</b>：开着时点不到角色，请用任务栏或托盘。</li>
+        <li><b>穿透</b>：开着时点不到角色，请用托盘。</li>
       </ul>
     </details>
   `;

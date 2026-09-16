@@ -78,6 +78,21 @@ export function bodyMotionsForMenu(items: CatalogItem[]): { id: string; label: s
     .map((item) => ({ id: item.id, label: motionMenuLabel(item) }));
 }
 
+/** Overlay must use the crop/stage, not the browser viewport (preview is a large Chrome window). */
+export function overlayViewport(
+  stage: { clientWidth: number; clientHeight: number } | null,
+  fallback: { innerWidth: number; innerHeight: number },
+): { width: number; height: number } {
+  const width = stage?.clientWidth ?? 0;
+  const height = stage?.clientHeight ?? 0;
+  if (width > 0 && height > 0) return { width, height };
+  return { width: fallback.innerWidth, height: fallback.innerHeight };
+}
+
+function stageViewport(): { width: number; height: number } {
+  return overlayViewport(document.getElementById("stage"), window);
+}
+
 /** Ignore the pointer event that opened the menu (right-click mouseup/click). */
 export function shouldDismissMenu(openedAt: number, now: number, targetInMenu: boolean, graceMs = 320): boolean {
   if (targetInMenu) return false;
@@ -105,7 +120,7 @@ export function bindContextMenu(
 
   const place = () => {
     const rect = menu.getBoundingClientRect();
-    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    const viewport = stageViewport();
     const face = hooks.faceRect?.() ?? faceSafeRect(viewport);
     const pos = placePopupAwayFromFace(face, { width: rect.width, height: rect.height }, viewport);
     menu.style.left = `${pos.x}px`;
@@ -321,8 +336,9 @@ export function bindMenuDrag(handle: HTMLElement, menu: HTMLElement): void {
     if (!dragging) return;
     const x = origin.left + event.clientX - origin.x;
     const y = origin.top + event.clientY - origin.y;
-    const maxX = Math.max(8, window.innerWidth - menu.offsetWidth - 8);
-    const maxY = Math.max(8, window.innerHeight - menu.offsetHeight - 8);
+    const viewport = stageViewport();
+    const maxX = Math.max(8, viewport.width - menu.offsetWidth - 8);
+    const maxY = Math.max(8, viewport.height - menu.offsetHeight - 8);
     menu.style.left = `${Math.min(maxX, Math.max(8, x))}px`;
     menu.style.top = `${Math.min(maxY, Math.max(8, y))}px`;
   });

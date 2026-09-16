@@ -8,6 +8,7 @@ import {
   croppedWindowSize,
   displayWindowSize,
   resolveFullWindow,
+  clampUserScale,
 } from "../shared/display-preset";
 import { fitScale, lockFitted } from "./fit-scale";
 
@@ -61,7 +62,7 @@ export function bottomPinHome(
   userScale: number,
   fullHeight: number,
 ): { x: number; y: number } {
-  const scale = Math.max(0.2, userScale);
+  const scale = clampUserScale(userScale);
   const cropH = viewHeight > 0 ? viewHeight : fullHeight;
   const baseH = Number.isFinite(fullHeight) && fullHeight > 0 ? fullHeight : cropH;
   return {
@@ -79,11 +80,11 @@ export function bottomPinFromLocalBottom(
   userScale: number,
   fullHeight: number,
 ): { x: number; y: number } {
-  const scale = Math.max(0.2, userScale);
+  const vis = (fitted > 0 ? fitted : 1) * clampUserScale(userScale);
   const floor = bottomPinHome(viewWidth, viewHeight, userScale, fullHeight).y;
   return {
     x: viewWidth / 2,
-    y: floor - localBottom * fitted * scale,
+    y: floor - localBottom * vis,
   };
 }
 
